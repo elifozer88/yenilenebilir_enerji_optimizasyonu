@@ -1,0 +1,26 @@
+# Python
+.venv/
+.venv-1/
+.venv-2/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# Data & Rasters
+data/
+*.tif
+*.tif.aux.xml
+*.gpkg
+*.shp
+*.geojson
+
+# Env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
