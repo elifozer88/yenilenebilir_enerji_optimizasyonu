@@ -1,32 +1,26 @@
-# Python
+# Root'taki .gitignore'u güncelle
+@"
+# Virtual envs
 .venv/
 .venv-1/
 .venv-2/
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.zip
-*.qgz
-*.shp
-*.dbf
-*.aux.xml
-.venv/
-node_modules/
+
+# IDE / tool artıkları
+.claude/
+.forgeflow/
+
 # Node
 node_modules/
+package-lock.json
 
-# Data & Rasters
+# Veri dosyaları
 data/
-*.tif
-*.tif.aux.xml
-*.gpkg
-*.shp
-*.geojson
+gadm41_TUR_2.json
+gadm41_TUR_2.json.zip
+*.zip
 
-# Env
+# Python
+__pycache__/
+*.pyc
 .env
-
-# OS
-.DS_Store
-Thumbs.db
+"@ | Set-Content .gitignore
