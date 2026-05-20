@@ -102,36 +102,49 @@ async def get_ges_polygons(
         # İlçe bazlı sorgu: ST_Intersection ile kesin clip,
         # ST_IsEmpty ve ST_IsValid kontrolleri eklenmiş → geçersiz geom dönmez
         query = """
+            WITH filtered_bolgeler AS (
+                SELECT
+                    ub.uuid::text            AS id,
+                    ub.uygunluk_sinif        AS sinif,
+                    ub.alan_ha,
+                    ub.tahmini_mw,
+                    ub.geom                  AS geom,
+                    ST_Transform(ilce_f.geom_32635, 4326) AS ilce_geom_4326
+                FROM enerji.uygunluk_bolge ub
+                JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
+                JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
+                CROSS JOIN (
+                    SELECT id, geom_32635
+                    FROM enerji.ilceler
+                    WHERE ilce_adi = $5
+                    LIMIT 1
+                ) ilce_f
+                WHERE et.kod = 'GES'
+                  AND s.kod  = $1
+                  AND ub.uygunluk_sinif >= $2
+                  AND ST_IsValid(ub.geom)
+                  AND (
+                    ub.ilce_id = ilce_f.id
+                    OR ST_Within(ST_PointOnSurface(ub.geom),
+                                 ST_Transform(ilce_f.geom_32635, 4326))
+                  )
+                ORDER BY ub.alan_ha DESC
+                LIMIT $3
+            )
             SELECT
-                ub.uuid::text            AS id,
-                ub.uygunluk_sinif        AS sinif,
-                ub.alan_ha,
-                ub.tahmini_mw,
-                COALESCE(i2.ilce_adi,'') AS ilce,
+                id,
+                sinif,
+                alan_ha,
+                tahmini_mw,
+                $5 AS ilce,
                 ST_AsGeoJSON(
-                    ST_SimplifyPreserveTopology(ub.geom, $4)
+                    ST_SimplifyPreserveTopology(
+                        ST_Intersection(geom, ilce_geom_4326),
+                        $4
+                    )
                 ) AS geom
-            FROM enerji.uygunluk_bolge ub
-            JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-            JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
-            LEFT JOIN enerji.ilceler i2 ON i2.id = ub.ilce_id
-            CROSS JOIN (
-                SELECT id, geom_32635
-                FROM enerji.ilceler
-                WHERE ilce_adi = $5
-                LIMIT 1
-            ) ilce_f
-            WHERE et.kod = 'GES'
-              AND s.kod  = $1
-              AND ub.uygunluk_sinif >= $2
-              AND ST_IsValid(ub.geom)
-              AND (
-                ub.ilce_id = ilce_f.id
-                OR ST_Within(ST_PointOnSurface(ub.geom),
-                             ST_Transform(ilce_f.geom_32635, 4326))
-              )
-            ORDER BY ub.alan_ha DESC
-            LIMIT $3
+            FROM filtered_bolgeler
+            WHERE NOT ST_IsEmpty(ST_Intersection(geom, ilce_geom_4326))
         """
         try:
             async with get_pool().acquire() as conn:
