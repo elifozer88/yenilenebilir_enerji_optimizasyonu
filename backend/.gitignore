@@ -1,0 +1,8 @@
+
+*.shp.zip
+*.zip
+*.json
+*.dbf
+*.qgz
+package-lock.json
+terrain-map/

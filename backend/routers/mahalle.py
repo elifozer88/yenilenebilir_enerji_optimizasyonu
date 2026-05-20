@@ -47,27 +47,33 @@ async def get_mahalleler(ilce_adi: str, enerji: str = Query(default="GES")):
             if not name:
                 continue
             cx, cy = float(row["cx"]), float(row["cy"])
+            pt = f"ST_SetSRID(ST_MakePoint({cx},{cy}), 4326)"
 
-            skor_row = await conn.fetchrow("""
+            # ── ilce_id NULL sorununu bypass et: sadece spatial + enerji_tipi filtrele ──
+            # 1. Merkez noktayı içeren polygon
+            skor_row = await conn.fetchrow(f"""
                 SELECT ub.uygunluk_sinif, ub.alan_ha, ub.tahmini_mw
                 FROM enerji.uygunluk_bolge ub
                 JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-                JOIN enerji.ilceler i ON i.id = ub.ilce_id
-                WHERE et.kod = $1 AND LOWER(i.ilce_adi) = LOWER($2)
-                  AND ST_Contains(ub.geom, ST_SetSRID(ST_MakePoint($3,$4), 4326))
-                ORDER BY ub.uygunluk_sinif DESC LIMIT 1
-            """, enerji, ilce_adi, cx, cy)
+                JOIN enerji.senaryo s ON s.id = ub.senaryo_id
+                WHERE et.kod = $1 AND s.kod = 'varsayilan'
+                  AND ST_Contains(ub.geom, {pt})
+                ORDER BY ub.uygunluk_sinif DESC
+                LIMIT 1
+            """, enerji)
 
+            # 2. Yoksa ilce geometrisi içindeki en yakın polygon
             if not skor_row:
-                skor_row = await conn.fetchrow("""
+                skor_row = await conn.fetchrow(f"""
                     SELECT ub.uygunluk_sinif, ub.alan_ha, ub.tahmini_mw
                     FROM enerji.uygunluk_bolge ub
                     JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-                    JOIN enerji.ilceler i ON i.id = ub.ilce_id
-                    WHERE et.kod = $1 AND LOWER(i.ilce_adi) = LOWER($2)
-                    ORDER BY ST_Distance(ub.geom, ST_SetSRID(ST_MakePoint($3,$4),4326)) ASC
+                    JOIN enerji.senaryo s ON s.id = ub.senaryo_id
+                    WHERE et.kod = $1 AND s.kod = 'varsayilan'
+                      AND ST_DWithin(ub.geom, {pt}, 0.05)
+                    ORDER BY ST_Distance(ub.geom, {pt}) ASC
                     LIMIT 1
-                """, enerji, ilce_adi, cx, cy)
+                """, enerji)
 
             features.append({
                 "type": "Feature",

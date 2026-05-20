@@ -1,26 +1,36 @@
-# Root'taki .gitignore'u güncelle
-@"
-# Virtual envs
+# Virtual environments
 .venv/
 .venv-1/
 .venv-2/
+venv/
+backend/venv/
 
-# IDE / tool artıkları
+# Nested repositories
+SignLanguage_MobileApp/
+
+# IDE and tool metadata
 .claude/
 .forgeflow/
+.idea/
+.vscode/
 
 # Node
 node_modules/
 package-lock.json
+frontend/node_modules/
+frontend/package-lock.json
+frontend/build/
 
-# Veri dosyaları
+# Data files
 data/
 gadm41_TUR_2.json
 gadm41_TUR_2.json.zip
 *.zip
+*.qgz
+*.tif
 
 # Python
 __pycache__/
 *.pyc
 .env
-"@ | Set-Content .gitignore
+backend/.env

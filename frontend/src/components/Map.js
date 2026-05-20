@@ -10,12 +10,9 @@ const MAPTILER_KEY = 'PzlgBC84G0BsOFlAoA71';
 const INITIAL_VIEW = { longitude:27.05, latitude:38.42, zoom:9.2, pitch:52, bearing:-15 };
 const CITY_VIEW    = { longitude:27.05, latitude:38.42, zoom:11, pitch:30, bearing:0 };
 
-// Sınıf/skor → RGBA — sinif string veya float gelebilir, skor da fallback olarak kullanılır
 function getSinifRgba(props, mode='fill') {
-  // sinif önce dene (1–5 integer)
   let s = props?.sinif ?? props?.sinif_id ?? props?.class ?? null;
   if (s === null || s === undefined) {
-    // skor varsa ona göre hesapla
     const skor = props?.skor ?? props?.uygunluk_skoru ?? 0;
     s = skor >= 4 ? 5 : skor >= 3 ? 4 : skor >= 2 ? 3 : skor >= 1 ? 2 : 1;
   }
@@ -60,6 +57,17 @@ export default function MapView({
     setViewState(p=>({...p,...(cityFocus?CITY_VIEW:INITIAL_VIEW),
       transitionDuration:1600, transitionInterpolator:new FlyToInterpolator({speed:1.3})}));
   }, [cityFocus]);
+
+  // ── FİX 1: selectedIlce temizlenince INITIAL_VIEW'a geri dön ──
+  useEffect(() => {
+    if(!selectedIlce) {
+      setViewState(p=>({
+        ...p, ...INITIAL_VIEW,
+        transitionDuration:1400,
+        transitionInterpolator:new FlyToInterpolator({speed:1.2}),
+      }));
+    }
+  }, [selectedIlce]);
 
   const doFlyTo = useCallback((ilceAdi, data) => {
     if(!ilceAdi||!data) return false;
@@ -118,7 +126,6 @@ export default function MapView({
     const t=energyType.toLowerCase();
 
     return [
-      // 1. Terrain 3D + uydu texture
       new TerrainLayer({
         id:'terrain', minZoom:0, maxZoom:13, strategy:'no-overlap',
         elevationDecoder:{rScaler:6553.6,gScaler:25.6,bScaler:0.1,offset:-10000},
@@ -127,7 +134,6 @@ export default function MapView({
         elevationScale:show3D?2.8:0.1, wireframe:false, parameters:{depthTest:true},
       }),
 
-      // 2. Uydu fallback — yüksek zoom
       ...(zoom>=12 ? [
         new TileLayer({
           id:'satellite-fallback',
@@ -140,7 +146,6 @@ export default function MapView({
         }),
       ]:[]),
 
-      // 3. GES/RES raster overlay (tile server port 8001)
       ...(showSuitability?[
         new TileLayer({
           id:`raster-${energyType}`,
@@ -153,7 +158,6 @@ export default function MapView({
         }),
       ]:[]),
 
-      // 4. Uygunluk bölgeleri — DOLU + renk kodlu — DOLU + renk kodlu
       ...(showSuitability&&polyData?[
         new GeoJsonLayer({
           id:`poly-fill-${energyType}`,
@@ -169,7 +173,6 @@ export default function MapView({
         }),
       ]:[]),
 
-      // 5. Min score mask (minScore > 1 ise alttaki bölgeleri karart)
       ...(showSuitability&&polyData&&minScore>1?[
         new GeoJsonLayer({
           id:`mask-${energyType}-${minScore}`,
@@ -181,7 +184,6 @@ export default function MapView({
         }),
       ]:[]),
 
-      // 6. İlçe sınırları — hover pickable
       ...(districtData?[
         new GeoJsonLayer({
           id:`districts-${energyType}`,
@@ -191,7 +193,6 @@ export default function MapView({
         }),
       ]:[]),
 
-      // 7. Seçili ilçe vurgu
       ...(districtData&&selectedIlce?(()=>{
         const feat=districtData.features.find(f=>f.properties?.ilce?.toLowerCase()===selectedIlce.toLowerCase());
         if(!feat) return [];
@@ -239,7 +240,11 @@ export default function MapView({
       <DeckGL
         viewState={viewState}
         onViewStateChange={({viewState:vs})=>setViewState(vs)}
-        controller={{inertia:500,scrollZoom:{smooth:true,speed:0.004},dragRotate:true}}
+        controller={{
+          inertia:300,
+          scrollZoom:{smooth:true, speed:0.015},
+          dragRotate:true,
+        }}
         layers={layers}
         getTooltip={getTooltip}
         onClick={({object})=>{

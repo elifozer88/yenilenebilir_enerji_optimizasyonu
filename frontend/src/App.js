@@ -56,7 +56,6 @@ const RESIllustration = () => (
         stroke="#38BDF8" strokeWidth="1.2" fill="none" opacity={0.22-i*0.05}
         strokeLinecap="round" strokeDasharray="5 4"/>
     ))}
-    {/* Türbin 1 */}
     <rect x="84" y="50" width="7" height="100" rx="2" fill="#475569"/>
     <circle cx="87" cy="54" r="6" fill="#64748b"/>
     <path d="M87 54 Q94 34 87 16 Q82 34 87 54" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.8"/>
@@ -65,7 +64,6 @@ const RESIllustration = () => (
     <circle cx="87" cy="54" r="3.5" fill="#64748b"/>
     <circle cx="87" cy="54" r="1.8" fill="#334155"/>
     <polygon points="80,150 94,150 91,138 83,138" fill="#374151"/>
-    {/* Türbin 2 */}
     <rect x="158" y="66" width="6" height="84" rx="2" fill="#475569"/>
     <circle cx="161" cy="69" r="5" fill="#64748b"/>
     <path d="M161 69 Q167 52 161 37 Q157 52 161 69" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.7"/>
@@ -74,7 +72,6 @@ const RESIllustration = () => (
     <circle cx="161" cy="69" r="3" fill="#64748b"/>
     <circle cx="161" cy="69" r="1.5" fill="#334155"/>
     <polygon points="155,150 167,150 165,141 157,141" fill="#374151"/>
-    {/* Türbin 3 küçük */}
     <rect x="224" y="80" width="5" height="70" rx="1.5" fill="#475569"/>
     <circle cx="226" cy="83" r="4" fill="#64748b"/>
     <path d="M226 83 Q231 69 226 57 Q222 69 226 83" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.7"/>
@@ -85,7 +82,6 @@ const RESIllustration = () => (
   </svg>
 );
 
-// ── İkon bileşenleri ──────────────────────────────────────────
 const SunIcon = ({ size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <circle cx="12" cy="12" r="4.5" fill="currentColor" fillOpacity="0.18"/>
@@ -138,7 +134,7 @@ export default function App() {
   const [page, setPage]           = useState('home');
   const [theme, setTheme]         = useState('dark');
   const [energyType, setEnergy]   = useState('GES');
-  const minScore = 1; // Tüm alanlar gösterilir — kullanıcı filtre yapmaz
+  const minScore = 1;
   const [stats, setStats]         = useState({ count:0, avgScore:'—', maxScore:'—', totalHa:0, totalMw:0 });
   const [apiStats, setApiStats]   = useState({ ges:null, res:null });
   const [cityFocus, setCityFocus] = useState(false);
@@ -151,7 +147,6 @@ export default function App() {
   const [ilceler, setIlceler]     = useState([]);
   const [havaDetay, setHavaDetay] = useState(null);
 
-  // AHP ağırlıkları — sabit (read-only)
   const WEIGHTS_GES = useMemo(() => ({
     solar:32, arazi:25, egim:11, baki:9, enerji:8, yerlesim:7, yol:4, fay:3, akarsu:1
   }), []);
@@ -171,7 +166,6 @@ export default function App() {
       .then(d=>setIlceDetay(d))
       .catch(()=>setIlceDetay(null))
       .finally(()=>setIlceLoading(false));
-    // Hava verisi
     fetch(`/api/hava/ilce/${encodeURIComponent(selectedIlce)}`)
       .then(r=>r.ok?r.json():null)
       .then(d=>setHavaDetay(d))
@@ -207,7 +201,6 @@ export default function App() {
   const gs = apiStats.ges;
   const rs = apiStats.res;
 
-  // AHP kriter tanımları
   const GES_CRITERIA = [
     {id:'solar',  k:'Solar Radyasyon', c:'#F59E0B'},
     {id:'arazi',  k:'Arazi Kullanımı', c:'#60A5FA'},
@@ -230,6 +223,16 @@ export default function App() {
     {id:'fay',       k:'Fay Uzaklığı',    c:'#94A3B8'},
     {id:'akarsu',    k:'Akarsu',          c:'#67E8F9'},
   ];
+
+  // ── Tema bazlı hero overlay renkleri ──
+  const heroOverlayLeft = theme === 'light'
+    ? 'linear-gradient(100deg, rgba(248,250,252,0.65) 0%, rgba(248,250,252,0.45) 38%, rgba(248,250,252,0.10) 65%, rgba(248,250,252,0.0) 100%)'
+    : 'linear-gradient(100deg, rgba(4,8,18,0.78) 0%, rgba(4,8,18,0.62) 38%, rgba(4,8,18,0.28) 65%, rgba(4,8,18,0.0) 100%)';
+  const heroOverlayBottom = theme === 'light'
+    ? 'linear-gradient(180deg, transparent 50%, rgba(248,250,252,0.6) 100%)'
+    : 'linear-gradient(180deg, transparent 50%, rgba(4,8,18,0.6) 100%)';
+  const heroTextColor = theme === 'light' ? '#0f172a' : undefined;
+  const heroSubColor  = theme === 'light' ? '#334155' : undefined;
 
   return (
     <div className="atlas-root">
@@ -256,7 +259,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* ── NAV: sadece 3 sekme ── */}
           <nav className="nav">
             {[['home','Ana Sayfa'],['atlas','Atlas'],['raporlar','Raporlar'],['santraller','Santraller']].map(([id,label]) => (
               <div key={id}
@@ -297,43 +299,39 @@ export default function App() {
               backgroundPosition:'center 22%',
               backgroundRepeat:'no-repeat',
             }}/>
-            {/* Sol koyu, sağ açık overlay */}
+            {/* ── FİX 1: Tema bazlı sol overlay ── */}
             <div style={{
               position:'absolute',inset:0,
-              background:'linear-gradient(100deg, rgba(4,8,18,0.93) 0%, rgba(4,8,18,0.82) 38%, rgba(4,8,18,0.45) 65%, rgba(4,8,18,0.1) 100%)',
+              background: heroOverlayLeft,
             }}/>
-            {/* Alt gradient — okunabilirlik */}
+            {/* ── FİX 2: Tema bazlı alt overlay ── */}
             <div style={{
               position:'absolute',inset:0,
-              background:'linear-gradient(180deg, transparent 50%, rgba(4,8,18,0.6) 100%)',
+              background: heroOverlayBottom,
             }}/>
-            {/* İçerik — üst hizalı */}
+            {/* ── FİX 3: Hero içerik — tema bazlı metin rengi ── */}
             <div style={{
               position:'absolute',top:0,left:0,right:0,zIndex:2,
               maxWidth:1280,margin:'0 auto',padding:'80px 56px 0',
               width:'100%',
+              color: heroTextColor,
             }}>
               <div style={{maxWidth:620}}>
-                <div className="hero-eyebrow" style={{marginBottom:20}}>
+                <div className="hero-eyebrow" style={{marginBottom:20, color: theme === 'light' ? 'var(--brand)' : undefined}}>
                   <span className="dot"/>
                   İklim Değişikliği · Temiz Enerji · DEÜ YBS 2026
                 </div>
-                <h1 className="hero-title" style={{fontSize:'clamp(2.2rem,3.8vw,3.4rem)',marginBottom:20}}>
+                <h1 className="hero-title" style={{fontSize:'clamp(2.2rem,3.8vw,3.4rem)',marginBottom:20, color: heroTextColor}}>
                   İzmir'in <em>yenilenebilir<br/>enerji potansiyeli</em><br/>tek harita üzerinde
                 </h1>
-                <p className="hero-sub" style={{fontSize:16,maxWidth:500,marginBottom:32}}>
+                <p className="hero-sub" style={{fontSize:16,maxWidth:500,marginBottom:32, color: heroSubColor}}>
                   GES ve RES uygunluk analizleri; AHP çok kriterli karar destek ve PostGIS tabanlı mekânsal veri tabanı üzerinden tüm ilçeler için sunulmaktadır.
                 </p>
                 <div className="hero-actions" style={{marginBottom:36}}>
                   <button className="btn-primary" onClick={() => setPage('atlas')} style={{padding:'12px 24px',fontSize:14}}>
                     Atlası İncele <ArrowIcon/>
                   </button>
-                  <button className="btn-ghost" onClick={() => goAtlas('GES')} style={{padding:'12px 24px',fontSize:14}}>
-                    GES Analizine Git <ArrowIcon/>
-                  </button>
                 </div>
-
-
               </div>
             </div>
             {/* Sağ alt — teknik badge'ler */}
@@ -341,7 +339,8 @@ export default function App() {
               {['AHP','PostGIS','100m','EPSG:32635'].map(t=>(
                 <span key={t} style={{
                   fontSize:9.5,fontWeight:700,
-                  background:'rgba(6,10,20,0.75)',backdropFilter:'blur(8px)',
+                  background: theme === 'light' ? 'rgba(248,250,252,0.82)' : 'rgba(6,10,20,0.75)',
+                  backdropFilter:'blur(8px)',
                   color:'var(--brand)',padding:'5px 10px',borderRadius:999,
                   border:'1px solid rgba(14,165,164,0.25)',letterSpacing:'0.04em',
                 }}>{t}</span>
@@ -448,12 +447,9 @@ export default function App() {
               </div>
               <div className="cat" style={{'--cat-color':'var(--brand)'}}>
                 <svg width="100%" viewBox="0 0 280 160" style={{display:'block',marginBottom:12}}>
-                  {/* AHP hiyerarşi şeması */}
                   <ellipse cx="140" cy="152" rx="140" ry="16" fill="currentColor" opacity="0.06"/>
-                  {/* Hedef - üst */}
                   <rect x="100" y="8" width="80" height="28" rx="6" fill="none" stroke="var(--brand,#0EA5A4)" strokeWidth="1.2" opacity="0.7"/>
                   <text x="140" y="27" textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--brand,#0EA5A4)" fontFamily="Manrope,sans-serif">Yer Seçimi</text>
-                  {/* Kriterler - orta */}
                   {[
                     {x:20, label:'Solar', color:'#F59E0B'},
                     {x:78, label:'Eğim', color:'#10B981'},
@@ -466,14 +462,12 @@ export default function App() {
                       <text x={item.x+30} y="84" textAnchor="middle" fontSize="10" fontWeight="500" fill={item.color} fontFamily="Manrope,sans-serif">{item.label}</text>
                     </g>
                   ))}
-                  {/* Alternatifler - alt */}
                   {[30, 100, 170, 230].map((x,i) => (
                     <g key={i}>
                       <rect x={x} y="112" width="42" height="20" rx="4" fill="none" stroke="var(--brand,#0EA5A4)" strokeWidth="0.8" opacity="0.4"/>
                       <text x={x+21} y="126" textAnchor="middle" fontSize="9" fill="var(--brand,#0EA5A4)" fontFamily="Manrope,sans-serif" opacity="0.7">Alan {i+1}</text>
                     </g>
                   ))}
-                  {/* Ağırlık göstergesi */}
                   {[
                     {x:20+30, w:0.32, color:'#F59E0B'},
                     {x:78+30, w:0.25, color:'#10B981'},
@@ -517,39 +511,45 @@ export default function App() {
                 <p className="footer-desc">İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü — DEÜ YBS Capstone Projesi 2026.</p>
                 <div className="footer-copy">© 2026 İzmir Büyükşehir Belediyesi</div>
               </div>
+
+              {/* ── FİX 4: Footer — tüm linkler navigasyon ile ── */}
               <div className="footer-col">
                 <h4>Analizler</h4>
-                <span className="footer-link" onClick={() => goAtlas('GES')}>GES Analizi</span>
-                <span className="footer-link" onClick={() => goAtlas('RES')}>RES Analizi</span>
-                <span className="footer-link" onClick={() => setPage('atlas')}>Birleşik Atlas</span>
-                <span className="footer-link" onClick={() => setPage('raporlar')}>İlçe Karşılaştırma</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('GES')}>GES Analizi</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('RES')}>RES Analizi</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => setPage('atlas')}>Birleşik Atlas</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => setPage('raporlar')}>İlçe Karşılaştırma</span>
               </div>
               <div className="footer-col">
                 <h4>Teknik</h4>
-                <span className="footer-link">QGIS / PostGIS</span>
-                <span className="footer-link">AHP Metodoloji</span>
-                <span className="footer-link">API Dokümantasyonu</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('https://qgis.org', '_blank')}>QGIS / PostGIS</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('https://www.sciencedirect.com/topics/engineering/analytic-hierarchy-process', '_blank')}>AHP Metodoloji</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('http://localhost:8003/docs', '_blank')}>API Dokümantasyonu</span>
               </div>
               <div className="footer-col">
                 <h4>Veri</h4>
-                <span className="footer-link">Global Solar Atlas</span>
-                <span className="footer-link">Global Wind Atlas</span>
-                <span className="footer-link">OSM / MTA / SRTM</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('https://globalsolaratlas.info', '_blank')}>Global Solar Atlas</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('https://globalwindatlas.info', '_blank')}>Global Wind Atlas</span>
+                <span className="footer-link" style={{cursor:'pointer'}}
+                  onClick={() => window.open('https://www.openstreetmap.org', '_blank')}>OSM / MTA / SRTM</span>
               </div>
             </div>
           </footer>
         </div>
       )}
 
-      {/* ── ATLAS (GES/RES dahil) ── */}
+      {/* ── ATLAS ── */}
       {(page === 'atlas' || page === 'ges' || page === 'res') && (
         <div style={{display:'flex',flexDirection:'column',minHeight:'calc(100vh - var(--nav-h))'}}>
           <div style={{display:'grid',gridTemplateColumns:'272px 1fr 272px',height:'calc(100vh - var(--nav-h))'}}>
 
             {/* ── SOL PANEL ── */}
             <aside className="analysis-sidebar" style={{borderRight:'1px solid var(--border)',overflowY:'auto'}}>
-
-              {/* Enerji tipi seçici */}
               <div className="sidebar-section">
                 <div className="energy-toggle">
                   <button
@@ -577,7 +577,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* AHP Ağırlıkları — READ ONLY */}
               <div className="sidebar-section">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                   <div className="sidebar-label">AHP Ağırlıkları</div>
@@ -611,7 +610,6 @@ export default function App() {
                         </div>
                         <span style={{fontSize:11,fontWeight:700,color:item.c,fontFamily:'JetBrains Mono,monospace'}}>{pct}%</span>
                       </div>
-                      {/* Read-only progress bar */}
                       <div style={{height:4,borderRadius:2,background:'var(--surface-2)',overflow:'hidden',position:'relative'}}>
                         <div style={{
                           height:'100%',width:`${pct}%`,
@@ -625,7 +623,6 @@ export default function App() {
                 })}
               </div>
 
-              {/* Görünüm */}
               <div className="sidebar-section">
                 <div className="sidebar-label">Görünüm</div>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -635,7 +632,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Uygunluk Skalası */}
               <div className="sidebar-section">
                 <div className="sidebar-label">Uygunluk Skalası</div>
                 {[
@@ -684,7 +680,6 @@ export default function App() {
                   setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80);
                 }}
               />
-              {/* Legend */}
               <div style={{
                 position:'absolute',bottom:16,left:16,zIndex:10,
                 background:'color-mix(in oklab, var(--surface) 92%, transparent)',
@@ -704,7 +699,6 @@ export default function App() {
                   {['Düşük','','Orta','','Yüksek'].map((n,i) => <span key={i}>{n}</span>)}
                 </div>
               </div>
-
             </div>
 
             {/* ── SAĞ PANEL ── */}
@@ -714,7 +708,6 @@ export default function App() {
                 <div style={{fontSize:11,fontWeight:600,color:'var(--brand)'}}>İZMİR</div>
               </div>
 
-              {/* ── İZMİR GENEL BİLGİ KARTI (her zaman görünür) ── */}
               <div style={{
                 background:'var(--surface-2)',
                 border:'1px solid var(--border)',
@@ -767,7 +760,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ── İLÇEYE GİT ── */}
               <div className="sidebar-section">
                 <div className="sidebar-label">İlçeye Git</div>
                 <div style={{display:'flex',gap:6}}>
@@ -797,7 +789,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* ── SEÇİLEN İLÇE KARTI (sadece seçim sonrası) ── */}
               {ilceLoading && (
                 <div style={{textAlign:'center',padding:'16px',color:'var(--muted)',fontSize:12}}>
                   <div style={{width:16,height:16,border:'2px solid var(--surface-2)',borderTopColor:'var(--brand)',
@@ -858,7 +849,6 @@ export default function App() {
                 );
               })()}
 
-              {/* ── HAVA VERİSİ ── */}
               {havaDetay && !ilceLoading && (
                 <div style={{
                   background:'var(--surface-2)',
@@ -877,8 +867,6 @@ export default function App() {
                       {havaDetay.anlik.zaman.slice(11,16)}
                     </div>
                   </div>
-
-                  {/* Anlık değerler — enerji tipine göre sıralı */}
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:12}}>
                     {(energyType==='GES' ? [
                       {icon:'☀',label:'Solar Radyasyon',val:`${havaDetay.anlik.solar_wm2} W/m²`,color:'#F59E0B',bar:Math.min(havaDetay.anlik.solar_wm2/1000,1)},
@@ -891,24 +879,17 @@ export default function App() {
                       {icon:'🌡',label:'Sıcaklık',val:`${havaDetay.anlik.sicaklik}°C`,color:'#F472B6',bar:Math.min((havaDetay.anlik.sicaklik+10)/50,1)},
                       {icon:'☁',label:'Bulutluluk',val:`%${havaDetay.anlik.bulutluluk}`,color:'#94A3B8',bar:havaDetay.anlik.bulutluluk/100},
                     ]).map(({icon,label,val,color,bar})=>(
-                      <div key={label} style={{
-                        background:'var(--surface)',borderRadius:8,padding:'8px 10px',
-                      }}>
-                        <div style={{display:'flex',justifyContent:'space-between',
-                          alignItems:'center',marginBottom:4}}>
+                      <div key={label} style={{background:'var(--surface)',borderRadius:8,padding:'8px 10px'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                           <span style={{fontSize:10,color:'var(--muted)'}}>{icon} {label}</span>
                         </div>
-                        <div style={{fontSize:13,fontWeight:700,color,
-                          fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{val}</div>
+                        <div style={{fontSize:13,fontWeight:700,color,fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{val}</div>
                         <div style={{height:3,borderRadius:2,background:'var(--surface-2)',overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${bar*100}%`,
-                            background:color,borderRadius:2,transition:'width 0.6s'}}/>
+                          <div style={{height:'100%',width:`${bar*100}%`,background:color,borderRadius:2,transition:'width 0.6s'}}/>
                         </div>
                       </div>
                     ))}
                   </div>
-
-                  {/* 7 günlük mini grafik */}
                   <div style={{fontSize:9.5,fontWeight:700,color:'var(--muted)',
                     marginBottom:7,textTransform:'uppercase',letterSpacing:'0.06em'}}>
                     7 Günlük Tahmin
@@ -919,17 +900,10 @@ export default function App() {
                       const windH  = Math.max((g.max_wind/50)*40,2);
                       const gun = new Date(g.tarih).toLocaleDateString('tr',{weekday:'short'});
                       return(
-                        <div key={i} style={{flex:1,display:'flex',
-                          flexDirection:'column',alignItems:'center',gap:2}}>
+                        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
                           <div style={{display:'flex',gap:1,alignItems:'flex-end',height:40}}>
-                            <div style={{
-                              width:6,height:solarH,borderRadius:'2px 2px 0 0',
-                              background:'#F59E0B',opacity:0.8,
-                            }} title={`Solar: ${g.max_solar} W/m²`}/>
-                            <div style={{
-                              width:6,height:windH,borderRadius:'2px 2px 0 0',
-                              background:'#38BDF8',opacity:0.8,
-                            }} title={`Rüzgâr: ${g.max_wind} km/h`}/>
+                            <div style={{width:6,height:solarH,borderRadius:'2px 2px 0 0',background:'#F59E0B',opacity:0.8}} title={`Solar: ${g.max_solar} W/m²`}/>
+                            <div style={{width:6,height:windH,borderRadius:'2px 2px 0 0',background:'#38BDF8',opacity:0.8}} title={`Rüzgâr: ${g.max_wind} km/h`}/>
                           </div>
                           <div style={{fontSize:8,color:'var(--dim)',textTransform:'capitalize'}}>{gun}</div>
                         </div>
@@ -947,7 +921,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* İlçe Sıralaması */}
               <div className="sidebar-section">
                 <div className="sidebar-label">İlçe Sıralaması</div>
                 {(energyType==='GES'
@@ -989,7 +962,6 @@ export default function App() {
               </div>
             </aside>
           </div>
-
         </div>
       )}
 

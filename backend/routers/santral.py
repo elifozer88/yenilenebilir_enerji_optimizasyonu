@@ -106,7 +106,7 @@ out center tags;"""
 
 from database import get_pool
 
-# PostGIS ile doğru ilçe eşleştirmesi
+
 async def ilce_ata_postgis(noktalar: list) -> list:
     """Koordinat listesine PostGIS ST_Contains ile ilçe ata."""
     if not noktalar:
@@ -123,43 +123,44 @@ async def ilce_ata_postgis(noktalar: list) -> list:
                 )
                 LIMIT 1
             """, lon, lat)
-            results.append(row["ilce_adi"] if row else "Diğer")
+            results.append(row["ilce_adi"] if row else "Diger")
         return results
+
+
+def _to_feature(s, ilce, enerji):
+    """Santral dict'ini GeoJSON Feature'a çevir."""
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
+        "properties": {
+            "osm_id":      s["osm_id"],
+            "santral_adi": s["santral_adi"],
+            "operator":    s["operator"],
+            "enerji_tipi": enerji,
+            "kapasite_mw": s["kapasite_mw"],
+            "ilce":        ilce,
+            "kaynak":      "OpenStreetMap",
+        },
+    }
 
 
 @router.get("/santral/list")
 async def get_santraller(enerji: str = Query(default="GES")):
     kaynak = "solar" if enerji == "GES" else "wind"
     santraller = await fetch_osm_santraller(kaynak)
-
-    # PostGIS ile ilçe eşleştir (cache'li veri üzerinde)
     koordinatlar = [(s["lat"], s["lon"]) for s in santraller]
     ilceler = await ilce_ata_postgis(koordinatlar)
 
-    features = []
-    for s, ilce in zip(santraller, ilceler):
-        features.append({
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
-            "properties": {
-                "osm_id":      s["osm_id"],
-                "santral_adi": s["santral_adi"],
-                "operator":    s["operator"],
-                "enerji_tipi": enerji,
-                "kapasite_mw": s["kapasite_mw"],
-                "ilce":        ilce,
-                "kaynak":      "OpenStreetMap",
-            }
-        })
+    features = [_to_feature(s, ilce, enerji) for s, ilce in zip(santraller, ilceler)]
     return {
         "type": "FeatureCollection",
         "features": features,
         "meta": {
-            "enerji": enerji,
-            "toplam_santral": len(features),
-            "kaynak": "OpenStreetMap (Overpass API)",
-            "cache_ttl_dk": 60,
-        }
+            "enerji":          enerji,
+            "toplam_santral":  len(features),
+            "kaynak":          "OpenStreetMap (Overpass API)",
+            "cache_ttl_dk":    60,
+        },
     }
 
 
@@ -176,18 +177,25 @@ async def get_izmir_ozet():
 
 @router.get("/santral/ilce/{ilce_adi}")
 async def get_ilce_santraller(ilce_adi: str, enerji: str = Query(default="GES")):
+    """İlçeye özgü santraller — GeoJSON FeatureCollection döner."""
     kaynak = "solar" if enerji == "GES" else "wind"
     santraller = await fetch_osm_santraller(kaynak)
     koordinatlar = [(s["lat"], s["lon"]) for s in santraller]
     ilceler = await ilce_ata_postgis(koordinatlar)
-    ilce_santraller = [
-        s for s, ilce in zip(santraller, ilceler)
+
+    features = [
+        _to_feature(s, ilce, enerji)
+        for s, ilce in zip(santraller, ilceler)
         if ilce.lower() == ilce_adi.lower()
     ]
+
     return {
-        "ilce": ilce_adi,
-        "enerji": enerji,
-        "santral_sayisi": len(ilce_santraller),
-        "santraller": ilce_santraller,
-        "kaynak": "OpenStreetMap",
+        "type": "FeatureCollection",
+        "features": features,
+        "meta": {
+            "ilce":           ilce_adi,
+            "enerji":         enerji,
+            "santral_sayisi": len(features),
+            "kaynak":         "OpenStreetMap (Overpass API)",
+        },
     }

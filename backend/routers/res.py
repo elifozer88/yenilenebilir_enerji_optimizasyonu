@@ -89,37 +89,92 @@ async def get_res_districts(senaryo: str = Query(default="varsayilan")):
 async def get_res_polygons(
     min_sinif: int = Query(default=4, ge=1, le=5),
     senaryo:   str = Query(default="varsayilan"),
-    limit:     int = Query(default=1000, ge=100, le=10000),
+    limit:     int = Query(default=1500, ge=100, le=10000),  # varsayılan 1500'e çıktı
+    ilce:      str = Query(default=None),
 ):
-    key = cache_key("res_polygons", min_sinif, senaryo, limit)
+    key = cache_key("res_polygons", min_sinif, senaryo, limit, ilce or "")
     cached = await polygon_cache.get(key)
     if cached:
         return Response(content=cached, media_type="application/json",
                         headers={"Cache-Control": "public,max-age=300", "X-Cache": "HIT"})
 
-    query = """
-        SELECT
-            ub.uuid::text           AS id,
-            ub.uygunluk_sinif       AS sinif,
-            ub.alan_ha,
-            ub.tahmini_mw,
-            COALESCE(i.ilce_adi,'') AS ilce,
-            ST_AsGeoJSON(
-                ST_SimplifyPreserveTopology(ub.geom, $4)
-            ) AS geom
-        FROM enerji.uygunluk_bolge ub
-        JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-        JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
-        LEFT JOIN enerji.ilceler i  ON i.id  = ub.ilce_id
-        WHERE et.kod = 'RES' AND s.kod = $1 AND ub.uygunluk_sinif >= $2
-        ORDER BY ub.alan_ha DESC
-        LIMIT $3
-    """
-    try:
-        async with get_pool().acquire() as conn:
-            rows = await conn.fetch(query, senaryo, min_sinif, limit, TOL_POLYGON)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if ilce:
+        # İlçe bazlı sorgu: ST_Intersection ile kesin clip,
+        # ST_IsEmpty ve ST_IsValid kontrolleri eklenmiş → geçersiz geom dönmez
+        query = """
+            SELECT
+                ub.uuid::text            AS id,
+                ub.uygunluk_sinif        AS sinif,
+                ub.alan_ha,
+                ub.tahmini_mw,
+                COALESCE(i2.ilce_adi,'') AS ilce,
+                ST_AsGeoJSON(
+                    ST_SimplifyPreserveTopology(
+                        ST_Intersection(
+                            ub.geom,
+                            ST_Transform(ilce_f.geom_32635, 4326)
+                        ),
+                        $4
+                    )
+                ) AS geom
+            FROM enerji.uygunluk_bolge ub
+            JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
+            JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
+            LEFT JOIN enerji.ilceler i2 ON i2.id = ub.ilce_id
+            CROSS JOIN (
+                SELECT id, geom_32635
+                FROM enerji.ilceler
+                WHERE ilce_adi = $5
+                LIMIT 1
+            ) ilce_f
+            WHERE et.kod = 'RES'
+              AND s.kod  = $1
+              AND ub.uygunluk_sinif >= $2
+              AND ST_IsValid(ub.geom)
+              AND (
+                ub.ilce_id = ilce_f.id
+                OR ST_Within(ST_PointOnSurface(ub.geom),
+                             ST_Transform(ilce_f.geom_32635, 4326))
+              )
+              AND NOT ST_IsEmpty(
+                    ST_Intersection(ub.geom,
+                                    ST_Transform(ilce_f.geom_32635, 4326))
+                  )
+            ORDER BY ub.alan_ha DESC
+            LIMIT $3
+        """
+        try:
+            async with get_pool().acquire() as conn:
+                rows = await conn.fetch(query, senaryo, min_sinif, limit, TOL_POLYGON, ilce)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    else:
+        query = """
+            SELECT
+                ub.uuid::text            AS id,
+                ub.uygunluk_sinif        AS sinif,
+                ub.alan_ha,
+                ub.tahmini_mw,
+                COALESCE(i.ilce_adi,'') AS ilce,
+                ST_AsGeoJSON(
+                    ST_SimplifyPreserveTopology(ub.geom, $4)
+                ) AS geom
+            FROM enerji.uygunluk_bolge ub
+            JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
+            JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
+            LEFT JOIN enerji.ilceler i  ON i.id  = ub.ilce_id
+            WHERE et.kod = 'RES'
+              AND s.kod  = $1
+              AND ub.uygunluk_sinif >= $2
+              AND ST_IsValid(ub.geom)
+            ORDER BY ub.alan_ha DESC
+            LIMIT $3
+        """
+        try:
+            async with get_pool().acquire() as conn:
+                rows = await conn.fetch(query, senaryo, min_sinif, limit, TOL_POLYGON)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     features = [
         {
@@ -134,7 +189,7 @@ async def get_res_polygons(
             },
         }
         for r in rows
-        if r["geom"]
+        if r["geom"] and r["geom"] != 'null'   # ← boş/null geom güvenliği
     ]
     result = json.dumps(
         {"type": "FeatureCollection", "features": features,
@@ -264,11 +319,15 @@ async def get_res_district(ilce_adi: str, senaryo: str = Query(default="varsayil
 # ── /api/res/district/{ilce_adi}/extremes ───────────────────
 @router.get("/res/district/{ilce_adi}/extremes")
 async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default="varsayilan")):
-    """İlçenin gerçek en yüksek ve en düşük uygunluk sınıfı bölgelerinin koordinatları."""
+    key = cache_key("res_extremes", ilce_adi.lower(), senaryo)
+    cached = await detail_cache.get(key)
+    if cached:
+        return Response(content=json.dumps(cached, ensure_ascii=False),
+                        media_type="application/json",
+                        headers={"Cache-Control": "public,max-age=600", "X-Cache": "HIT"})
 
     sinif_q = """
-        SELECT
-            u.sinif1_ha, u.sinif2_ha, u.sinif3_ha, u.sinif4_ha, u.sinif5_ha
+        SELECT u.sinif1_ha, u.sinif2_ha, u.sinif3_ha, u.sinif4_ha, u.sinif5_ha
         FROM enerji.ilce_uygunluk u
         JOIN enerji.ilceler     i  ON i.id  = u.ilce_id
         JOIN enerji.enerji_tipi et ON et.id = u.enerji_tipi_id
@@ -278,30 +337,42 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
 
     bolge_max_q = """
         SELECT
-            ST_X(ST_PointOnSurface(ub.geom)) AS lon,
-            ST_Y(ST_PointOnSurface(ub.geom)) AS lat,
+            ST_X(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lon,
+            ST_Y(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lat,
             ub.uygunluk_sinif AS sinif,
             ub.alan_ha
         FROM enerji.uygunluk_bolge ub
-        JOIN enerji.ilceler     i  ON i.id  = ub.ilce_id
         JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-        JOIN enerji.senaryo     s  ON s.id  = ub.senaryo_id
-        WHERE et.kod = 'RES' AND s.kod = $1 AND i.ilce_adi = $2
+        JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
+        CROSS JOIN (
+            SELECT id, geom_32635 FROM enerji.ilceler WHERE ilce_adi = $2 LIMIT 1
+        ) ilce_f
+        WHERE et.kod = 'RES' AND s.kod = $1
+          AND (
+            ub.ilce_id = ilce_f.id
+            OR ST_Within(ST_PointOnSurface(ub.geom), ST_Transform(ilce_f.geom_32635, 4326))
+          )
         ORDER BY ub.uygunluk_sinif DESC, ub.alan_ha DESC
         LIMIT 1
     """
 
     bolge_min_q = """
         SELECT
-            ST_X(ST_PointOnSurface(ub.geom)) AS lon,
-            ST_Y(ST_PointOnSurface(ub.geom)) AS lat,
+            ST_X(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lon,
+            ST_Y(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lat,
             ub.uygunluk_sinif AS sinif,
             ub.alan_ha
         FROM enerji.uygunluk_bolge ub
-        JOIN enerji.ilceler     i  ON i.id  = ub.ilce_id
         JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-        JOIN enerji.senaryo     s  ON s.id  = ub.senaryo_id
-        WHERE et.kod = 'RES' AND s.kod = $1 AND i.ilce_adi = $2
+        JOIN enerji.senaryo      s  ON s.id  = ub.senaryo_id
+        CROSS JOIN (
+            SELECT id, geom_32635 FROM enerji.ilceler WHERE ilce_adi = $2 LIMIT 1
+        ) ilce_f
+        WHERE et.kod = 'RES' AND s.kod = $1
+          AND (
+            ub.ilce_id = ilce_f.id
+            OR ST_Within(ST_PointOnSurface(ub.geom), ST_Transform(ilce_f.geom_32635, 4326))
+          )
         ORDER BY ub.uygunluk_sinif ASC, ub.alan_ha ASC
         LIMIT 1
     """
@@ -312,13 +383,7 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
             if not u:
                 raise HTTPException(status_code=404, detail=f"{ilce_adi} bulunamadı")
 
-            siniflar = {
-                1: float(u["sinif1_ha"] or 0),
-                2: float(u["sinif2_ha"] or 0),
-                3: float(u["sinif3_ha"] or 0),
-                4: float(u["sinif4_ha"] or 0),
-                5: float(u["sinif5_ha"] or 0),
-            }
+            siniflar = {k: float(u[f"sinif{k}_ha"] or 0) for k in range(1, 6)}
             dolu = {k: v for k, v in siniflar.items() if v > 0}
             true_max = max(dolu.keys()) if dolu else 4
             true_min = min(dolu.keys()) if dolu else 4
@@ -339,7 +404,7 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
         abs(float(r_max["lat"]) - float(r_min["lat"])) < 0.0001
     )
 
-    return {
+    result = {
         "ilce": ilce_adi,
         "true_max_sinif": true_max,
         "true_min_sinif": true_min,
@@ -358,6 +423,8 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
             "label":   f"Sınıf {true_min} — En Düşük",
         },
     }
+    await detail_cache.set(key, result)
+    return result
 
 
 # ── /api/res/scenarios ──────────────────────────────────────

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database import init_pool, close_pool
-from routers import ges, res, terrain, ml, mahalle, pdf_rapor, hava, santral, auth
+from routers import ges, res, terrain, ml, mahalle, pdf_rapor, hava, santral, auth, ahp
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +36,7 @@ app.include_router(pdf_rapor.router, prefix="/api")
 app.include_router(hava.router,      prefix="/api")
 app.include_router(santral.router,   prefix="/api")
 app.include_router(auth.router,      prefix="/api")
+app.include_router(ahp.router,       prefix="/api")
 
 @app.get("/api/health")
 async def health():
