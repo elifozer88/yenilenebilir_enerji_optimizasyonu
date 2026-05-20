@@ -109,13 +109,7 @@ async def get_ges_polygons(
                 ub.tahmini_mw,
                 COALESCE(i2.ilce_adi,'') AS ilce,
                 ST_AsGeoJSON(
-                    ST_SimplifyPreserveTopology(
-                        ST_Intersection(
-                            ub.geom,
-                            ST_Transform(ilce_f.geom_32635, 4326)
-                        ),
-                        $4
-                    )
+                    ST_SimplifyPreserveTopology(ub.geom, $4)
                 ) AS geom
             FROM enerji.uygunluk_bolge ub
             JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
@@ -136,10 +130,6 @@ async def get_ges_polygons(
                 OR ST_Within(ST_PointOnSurface(ub.geom),
                              ST_Transform(ilce_f.geom_32635, 4326))
               )
-              AND NOT ST_IsEmpty(
-                    ST_Intersection(ub.geom,
-                                    ST_Transform(ilce_f.geom_32635, 4326))
-                  )
             ORDER BY ub.alan_ha DESC
             LIMIT $3
         """
