@@ -4,8 +4,6 @@ import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer, GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 
-const TILE_SERVER = 'http://127.0.0.1:8001';
-
 function geomToView(geom) {
   try {
     const coords = [];
@@ -34,23 +32,41 @@ const S_RENK_RGB = {
 };
 
 // ── MiniMap ────────────────────────────────────────────────────
-export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', height=320, highlightPoint=null, mahalleFeature=null }) {
+export default function MiniMap({
+  ilceAdi,
+  energyType='GES',
+  color='#0EA5A4',
+  height=320,
+  highlightPoint=null,
+  mahalleFeature=null,
+  santralData=null,
+  showSantraller=false
+}) {
   const [viewState, setViewState] = useState({longitude:27.05,latitude:38.42,zoom:9,pitch:0,bearing:0});
   const [ilceFeat,  setIlceFeat]  = useState(null);
+  const [polyData,  setPolyData]  = useState(null);
   const [ready,     setReady]     = useState(false);
   const [activePin, setActivePin] = useState(null); // {lon, lat, sinif, label}
 
-  // İlçe geometrisini yükle ve başlangıç view'ını ayarla
+  // İlçe geometrisini ve uygunluk poligonlarını yükle
   useEffect(() => {
     if(!ilceAdi) return;
     setReady(false);
     setIlceFeat(null);
+    setPolyData(null);
     setActivePin(null);
-    fetch(`/api/${energyType.toLowerCase()}/districts`)
-      .then(r => r.ok ? r.json() : null)
-      .then(gj => {
-        if(!gj?.features) return;
-        const feat = gj.features.find(f =>
+
+    const t = energyType.toLowerCase();
+
+    Promise.all([
+      fetch(`/api/${t}/districts`)
+        .then(r => r.ok ? r.json() : null),
+      fetch(`/api/${t}/polygons?min_sinif=1&limit=3000&ilce=${encodeURIComponent(ilceAdi)}`)
+        .then(r => r.ok ? r.json() : null)
+    ])
+    .then(([districtsGj, polyGj]) => {
+      if(districtsGj?.features) {
+        const feat = districtsGj.features.find(f =>
           f.properties?.ilce?.toLowerCase() === ilceAdi.toLowerCase()
         );
         if(feat?.geometry) {
@@ -58,9 +74,13 @@ export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', he
           const v = geomToView(feat.geometry);
           if(v) setViewState(v);
         }
-      })
-      .catch(() => {})
-      .finally(() => setReady(true));
+      }
+      if(polyGj) {
+        setPolyData(polyGj);
+      }
+    })
+    .catch(() => {})
+    .finally(() => setReady(true));
   }, [ilceAdi, energyType]);
 
   // highlightPoint değişince haritayı o noktaya uçur
@@ -92,28 +112,54 @@ export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', he
           return new BitmapLayer(p,{data:null,image:p.data,bounds:[west,south,east,north]});
         },
       }),
-      // GES/RES overlay
-      new TileLayer({
-        id:`mm-raster-${ilceAdi}-${t}`,
-        data:`${TILE_SERVER}/tiles/${t}/{z}/{x}/{y}.png`,
-        minZoom:6, maxZoom:14, tileSize:256, opacity:0.7,
-        renderSubLayers: p => {
-          const {west,south,east,north}=p.tile.bbox;
-          return new BitmapLayer(p,{data:null,image:p.data,bounds:[west,south,east,north],
-            parameters:{depthTest:false}});
-        },
-      }),
-      // İlçe sınırı
+
+      // GES/RES uygunluk bölgeleri (sadece ilçe sınırı içerisinde)
+      ...(polyData ? [
+        new GeoJsonLayer({
+          id:`mm-poly-fill-${ilceAdi}-${t}`,
+          data:polyData,
+          pickable:true,
+          filled:true,
+          stroked:false,
+          getFillColor: f => {
+            const sinif = f.properties?.sinif ?? 3;
+            const cRgb = S_RENK_RGB[sinif] || [128,128,128];
+            return [...cRgb, 145];
+          },
+          parameters:{depthTest:false},
+        })
+      ] : []),
+
+      // İlçe sınırı (mahalle seçimlerinde kaybolmaz)
       ...(ilceFeat ? [
         new GeoJsonLayer({
           id:`mm-sinir-${ilceAdi}`,
           data:{type:'FeatureCollection',features:[ilceFeat]},
           pickable:false, filled:false, stroked:true,
-          getLineColor:mahalleFeature ? [...rgb, 80] : [...rgb, 240],
-          lineWidthMinPixels:mahalleFeature ? 1 : 2.5,
+          getLineColor:[...rgb, 230],
+          lineWidthMinPixels:2.2,
           parameters:{depthTest:false},
         }),
       ] : []),
+
+      // Mevcut kurulu santraller
+      ...(showSantraller && santralData?.features ? [
+        new ScatterplotLayer({
+          id:`mm-santraller-${ilceAdi}-${t}`,
+          data:santralData.features,
+          getPosition: d => d.geometry.coordinates,
+          getRadius: 160,
+          radiusMinPixels: 5.5,
+          radiusMaxPixels: 14,
+          getFillColor: t === 'ges' ? [251, 191, 36, 230] : [56, 189, 248, 230],
+          getLineColor: [255, 255, 255, 200],
+          lineWidthMinPixels: 1.2,
+          stroked: true,
+          pickable: true,
+          parameters:{depthTest:false},
+        })
+      ] : []),
+
       // Aktif pin (max veya min nokta) — mahalle modunda gösterme
       ...(activePin && !mahalleFeature ? [
         // Dış halka — pulse efekti için büyük çember
@@ -148,8 +194,8 @@ export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', he
           pickable:false,
           filled:true,
           stroked:true,
-          getFillColor:[14,165,164,30],
-          getLineColor:[255,255,255,240],
+          getFillColor:[14,165,164,35],
+          getLineColor:[255,255,255,250],
           lineWidthMinPixels:3,
           parameters:{depthTest:false},
         }),
@@ -166,7 +212,47 @@ export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', he
         },
       }),
     ];
-  }, [ilceAdi, energyType, ilceFeat, rgb, activePin, mahalleFeature]);
+  }, [ilceAdi, energyType, ilceFeat, polyData, rgb, activePin, mahalleFeature, santralData, showSantraller]);
+
+  const getTooltip = ({ object }) => {
+    if (!object?.properties) return null;
+    const p = object.properties;
+
+    // Eğer elektrik santraliyse
+    if (p.santral_adi !== undefined) {
+      const tipRenk = energyType === 'GES' ? '#F59E0B' : '#38BDF8';
+      const ad = p.santral_adi.startsWith('OSM-')
+        ? (energyType === 'GES' ? 'Güneş Enerji Santrali' : 'Rüzgâr Enerji Santrali')
+        : p.santral_adi;
+      return {
+        html: `<div style="background:rgba(10,16,30,0.97);border:1px solid rgba(255,255,255,0.1);border-top:3px solid ${tipRenk};border-radius:10px;padding:10px 14px;font-family:'Manrope',sans-serif;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+          <div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:6px">${ad}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:3px">Kapasite: <span style="color:${tipRenk};font-weight:700">${p.kapasite_mw ? p.kapasite_mw + ' MW' : 'Bilinmiyor'}</span></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.5)">Operatör: <span style="color:#fff">${p.operator === '—' ? 'Bilinmiyor' : p.operator}</span></div>
+        </div>`,
+        style: { background: 'none', border: 'none', padding: '0' }
+      };
+    }
+
+    // Eğer uygunluk bölgesi poligonuysa
+    if (p.sinif !== undefined) {
+      const sinifRenk = { 5: '#14803C', 4: '#4AA635', 3: '#D97706', 2: '#DC6B2E', 1: '#B91C1C' };
+      const sinifAd = { 5: 'Çok Uygun', 4: 'Uygun', 3: 'Orta', 2: 'Düşük', 1: 'Uygunsuz' };
+      const renk = sinifRenk[Math.round(p.sinif)] || '#888';
+      const ad = sinifAd[Math.round(p.sinif)] || '';
+      return {
+        html: `<div style="background:rgba(10,16,30,0.97);border:1px solid rgba(255,255,255,0.1);border-left:3px solid ${renk};border-radius:10px;padding:10px 14px;font-family:'Manrope',sans-serif;min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+          <div style="font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${renk};margin-bottom:4px">${energyType} Uygunluk</div>
+          <div style="font-size:15px;font-weight:800;color:${renk}">Sınıf ${Math.round(p.sinif)} (${ad})</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:6px">Alan: <span style="color:#fff;font-weight:700">${Number(p.alan_ha || 0).toFixed(1)} ha</span></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.5)">~Kapasite: <span style="color:#0EA5A4;font-weight:700">${Number(p.tahmini_mw || p.mw || 0).toFixed(1)} MW</span></div>
+        </div>`,
+        style: { background: 'none', border: 'none', padding: '0' }
+      };
+    }
+
+    return null;
+  };
 
   return (
     <div style={{position:'relative',width:'100%',height,background:'#06090f'}}>
@@ -184,6 +270,7 @@ export default function MiniMap({ ilceAdi, energyType='GES', color='#0EA5A4', he
         onViewStateChange={({viewState:vs})=>setViewState(vs)}
         controller={{inertia:200,scrollZoom:{smooth:true,speed:0.003}}}
         layers={layers}
+        getTooltip={getTooltip}
         style={{position:'absolute',inset:0}}
       />
 

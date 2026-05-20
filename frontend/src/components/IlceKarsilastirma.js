@@ -878,6 +878,36 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
                 );
               })}
             </div>
+
+            {/* Bilgi Kartı */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(14,165,164,0.07) 0%, rgba(14,165,164,0.01) 100%)',
+              border: '1px solid rgba(14,165,164,0.25)',
+              borderRadius: 12,
+              padding: '16px 20px',
+              marginTop: 24,
+              display: 'flex',
+              gap: 16,
+              alignItems: 'flex-start'
+            }}>
+              <div style={{fontSize: 22, color: 'var(--brand)', marginTop: 2}}>ℹ️</div>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                <div style={{fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '0.04em'}}>
+                  Potansiyel Hesaplama Metodolojisi
+                </div>
+                <div style={{fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.6}}>
+                  {et === 'GES' ? (
+                    <span>
+                      <strong>Güneş Enerjisi (GES) Potansiyeli</strong>: Analiz edilen uygun bölgelerin (Sınıf 4 ve Sınıf 5 alanlar) toplam yüzölçümü (hektar) esas alınarak hesaplanır. Hesaplamalarda, metrekare başına düşen yıllık ortalama global güneş radyasyonu (GHI) verileri, panel verimliliği (%20) ve performans oranı (%75) baz alınmıştır. Yıllık elektrik üretimi ve CO₂ azaltımı değerleri bu kabullere göre optimize edilmiştir.
+                    </span>
+                  ) : (
+                    <span>
+                      <strong>Rüzgâr Enerjisi (RES) Potansiyeli</strong>: 100 metre yükseklikteki yıllık ortalama rüzgâr hızı, topografik pürüzlülük ve eğim sınırlamaları göz önünde bulundurularak hesaplanmıştır. Kurulu güç kapasite tahmini (MW), uygun alan yoğunluğuna göre standart 3 MW gücündeki modern rüzgâr türbinlerinin yerleşim mesafeleri (türbinler arası 5D x 3D boşluk) dikkate alınarak simüle edilmiştir.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1086,41 +1116,80 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
           <div style={{background:'var(--card)',borderRadius:16,
             boxShadow:'0 2px 16px rgba(0,0,0,0.2)',
             border:'1px solid var(--border)',padding:'24px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
               <div>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',
-                  textTransform:'uppercase',color:'var(--muted)',marginBottom:4}}>ML Doğrulama</div>
-                <div style={{fontSize:16,fontWeight:800,color:'var(--text)'}}>Random Forest Analizi</div>
+                  textTransform:'uppercase',color:'var(--muted)',marginBottom:4}}>Makine Öğrenmesi ile Doğrulama</div>
+                <div style={{fontSize:16,fontWeight:800,color:'var(--text)'}}>Random Forest (Yapay Zekâ) Analizi</div>
               </div>
               <button onClick={runML} disabled={mlData?.loading} style={{
                 padding:'10px 22px',borderRadius:10,
                 background:'rgba(14,165,164,0.1)',border:'1.5px solid rgba(14,165,164,0.35)',
                 color:'#0EA5A4',fontFamily:'inherit',fontSize:13,fontWeight:700,
                 cursor:'pointer',opacity:mlData?.loading?0.6:1,
-              }}>{mlData?.loading?'⏳ Eğitiliyor…':'▶ RF Modelini Çalıştır'}</button>
+                transition:'all 0.2s',
+              }}
+              onMouseEnter={e => { if(!mlData?.loading) e.currentTarget.style.background = 'rgba(14,165,164,0.18)'; }}
+              onMouseLeave={e => { if(!mlData?.loading) e.currentTarget.style.background = 'rgba(14,165,164,0.1)'; }}
+              >{mlData?.loading?'⏳ Eğitiliyor…':'▶ RF Modelini Çalıştır'}</button>
             </div>
+
+            {/* Başlangıç Rehberi (Hiç bilmeyen biri için açıklama kartı) */}
+            <div style={{
+              background:'var(--surface-2)',
+              border:'1px solid var(--border)',
+              borderRadius:12,
+              padding:20,
+              marginBottom:24,
+              display:'flex',
+              flexDirection:'column',
+              gap:12,
+            }}>
+              <div style={{display:'flex',alignItems:'center',gap:10,fontSize:14,fontWeight:700,color:'var(--brand)'}}>
+                <span>🤖</span> Yapay Zekâ Doğrulaması Nedir ve Nasıl Çalışır?
+              </div>
+              <div style={{fontSize:12,color:'var(--text-2)',lineHeight:1.6,display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+                <div>
+                  Bu sayfa, Coğrafi Bilgi Sistemleri (CBS) kriterleriyle kurduğumuz <strong>AHP (Karar Analizi)</strong> modelini doğrulamak için bir <strong>Random Forest (Makine Öğrenmesi)</strong> modeli eğitir. Yapay zekâ, ilçelerdeki binlerce pikseli inceleyerek kriterlerin önem derecesini kendisi hesaplar ve bizim modelimizle karşılaştırır.
+                </div>
+                <div>
+                  <strong>Adımlar:</strong><br/>
+                  1. Sağ üstteki <strong>RF Modelini Çalıştır</strong> butonuna basın.<br/>
+                  2. Yapay zekanın kriterlerinize verdiği <strong>Özellik Önemi</strong> yüzdelerini inceleyin.<br/>
+                  3. <strong>AHP vs RF</strong> tablosunda bizim verdiğimiz puanlar ile yapay zekanın verdiği puanlar arasındaki <strong>Farkı (Δ)</strong> analiz edin. Farkın sıfıra yakın olması modelimizin güvenilirliğini kanıtlar.
+                </div>
+              </div>
+            </div>
+
             {!mlData&&(
-              <div style={{textAlign:'center',padding:'40px 0',color:'var(--dim)',fontSize:13}}>
-                Butona basarak {et} için Random Forest modelini eğitin.
+              <div style={{textAlign:'center',padding:'40px 0',color:'var(--dim)',fontSize:13,
+                border:'2px dashed var(--border)',borderRadius:12,background:'var(--surface)'}}>
+                <span>👉</span> Üstteki butona basarak {et} için Random Forest yapay zekâ modelini hemen eğitebilirsiniz.
               </div>
             )}
+
             {mlData&&!mlData.loading&&(
               <>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}>
-                  {[['OOB Score',mlData.oob_score],['Pearson r',mlData.pearson_r],
-                    ['AHP Ort.',mlData.ahp_ortalama+'/5'],['RF Ort.',mlData.rf_ortalama+'/5']].map(([l,v])=>(
-                    <div key={l} style={{background:'var(--surface)',border:'1px solid var(--border)',
+                  {[
+                    { label: 'Tahmin Başarısı', sub: 'OOB Score (>0.80 idealdir)', val: mlData.oob_score },
+                    { label: 'Uyum Korelasyonu', sub: 'Pearson r (1.00\'e yakınlık)', val: mlData.pearson_r },
+                    { label: 'Formül Ortalaması', sub: 'AHP Skoru (/5)', val: mlData.ahp_ortalama + '/5' },
+                    { label: 'Yapay Zekâ Ort.', sub: 'RF Skoru (/5)', val: mlData.rf_ortalama + '/5' }
+                  ].map(({ label, sub, val }) => (
+                    <div key={label} style={{background:'var(--surface)',border:'1px solid var(--border)',
                       borderRadius:12,padding:'14px',textAlign:'center'}}>
                       <div style={{fontSize:22,fontWeight:800,color:'#0EA5A4',
-                        fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{v}</div>
-                      <div style={{fontSize:10.5,color:'var(--muted)'}}>{l}</div>
+                        fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{val}</div>
+                      <div style={{fontSize:11,fontWeight:700,color:'var(--text)'}}>{label}</div>
+                      <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>{sub}</div>
                     </div>
                   ))}
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
                   <div>
                     <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.08em',
-                      textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>Özellik Önemi</div>
+                      textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>Yapay Zekaya Göre Belirleyici Kriterler</div>
                     {mlData.feature_importance.slice(0,8).map((fi,i)=>{
                       const meta=KRITER_META[fi.kriter]||{ad:fi.kriter,renk:'#888'};
                       return(
@@ -1143,12 +1212,12 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
                   </div>
                   <div>
                     <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.08em',
-                      textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>AHP vs RF</div>
+                      textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>AHP Formülü vs Yapay Zekâ Puan Kıyaslaması</div>
                     <div style={{overflowY:'auto',maxHeight:320,borderRadius:10,
                       border:'1px solid var(--border)',overflow:'hidden'}}>
                       <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
                         <thead><tr style={{background:'var(--surface)'}}>
-                          {['İlçe','AHP','RF','Δ'].map(h=>(
+                          {['İlçe', 'Bizim (AHP)', 'Yapay Zekâ (RF)', 'Fark (Δ)'].map(h=>(
                             <th key={h} style={{padding:'8px 12px',
                               textAlign:h==='İlçe'?'left':'center',
                               fontSize:9.5,fontWeight:700,letterSpacing:'0.07em',

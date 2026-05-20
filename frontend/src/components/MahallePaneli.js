@@ -142,6 +142,36 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
       {/* Harita + Tablo */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',minHeight:380}}>
         <div style={{position:'relative',borderRight:'1px solid var(--border)'}}>
+          {/* Kurulu Santralleri Göster Butonu (Üst Kısım Kolay Erişim) */}
+          <button onClick={toggleSantraller} style={{
+            position: 'absolute', top: 8, left: 10, zIndex: 10,
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 8,
+            border: `1px solid ${showSantraller ? SANTRAL_HEX[et] : 'rgba(255,255,255,0.15)'}`,
+            background: showSantraller
+              ? (et==='GES'?'rgba(245,158,11,0.95)':'rgba(56,189,248,0.95)')
+              : 'rgba(10,16,30,0.85)',
+            backdropFilter: 'blur(8px)',
+            color: showSantraller ? '#000' : '#fff',
+            fontFamily: 'inherit', fontSize: 10.5, fontWeight: 800,
+            cursor: 'pointer', transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            textTransform: 'uppercase', letterSpacing: '0.04em'
+          }}>
+            <span>{et === 'GES' ? '☀' : '💨'}</span>
+            <span>{et} Santralleri {showSantraller ? 'Gizle' : 'Göster'}</span>
+            {santralCount > 0 && (
+              <span style={{
+                fontSize: 9.5, padding: '1px 5px', borderRadius: 10,
+                background: showSantraller ? 'rgba(0,0,0,0.2)' : `${SANTRAL_HEX[et]}30`,
+                color: showSantraller ? '#000' : SANTRAL_HEX[et],
+                fontWeight: 800, marginLeft: 2
+              }}>
+                {santralCount}
+              </span>
+            )}
+          </button>
+
           <MiniMap
             ilceAdi={ilceAdi}
             energyType={et}

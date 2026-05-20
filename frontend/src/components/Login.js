@@ -141,6 +141,55 @@ export default function Login({ onLogin }) {
         }}>
           {loading ? 'Giriş yapılıyor…' : 'Giriş Yap →'}
         </button>
+
+        {/* Hızlı Giriş Paneli */}
+        <div style={{ marginTop: 22, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 18 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)',
+            textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, textAlign: 'center' }}>
+            Hızlı Giriş Seçenekleri
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {[
+              { u: 'admin', p: 'admin123', label: 'Admin', color: '#F59E0B' },
+              { u: 'mudur', p: 'mudur123', label: 'Müdür', color: '#A78BFA' },
+              { u: 'analist1', p: 'analist123', label: 'Analist', color: '#38BDF8' },
+            ].map(user => (
+              <button
+                key={user.u}
+                onClick={() => setForm({ kullanici_adi: user.u, sifre: user.p })}
+                style={{
+                  padding: '8px 4px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(255,255,255,0.04)',
+                  color: '#fff',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.borderColor = user.color + '40';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+                }}
+              >
+                <span style={{ color: user.color, fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>
+                  {user.label}
+                </span>
+                <span style={{ fontSize: 9, opacity: 0.5 }}>{user.u}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
