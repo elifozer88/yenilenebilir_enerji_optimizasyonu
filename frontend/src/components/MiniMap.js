@@ -3,6 +3,7 @@ import DeckGL from '@deck.gl/react';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer, GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
+import { MaskExtension } from '@deck.gl/extensions';
 
 function geomToView(geom) {
   try {
@@ -113,19 +114,46 @@ export default function MiniMap({
         },
       }),
 
-      // GES/RES uygunluk bölgeleri (sadece ilçe sınırı içerisinde)
+      // 1. Mask Layer (Sadece maskeleme amacıyla kullanılır, ekrana çizilmez)
+      ...(ilceFeat ? [
+        new GeoJsonLayer({
+          id: `mm-mask-${ilceAdi}`,
+          data: {type: 'FeatureCollection', features: [ilceFeat]},
+          operation: 'mask',
+        })
+      ] : []),
+
+      // 2. Maskelenmiş Raster Uygunluk Katmanı (Tüm ilçe sınırını taşmadan renklendirir)
+      new TileLayer({
+        id:`mm-raster-${ilceAdi}-${t}`,
+        data:`http://127.0.0.1:8001/tiles/${t}/{z}/{x}/{y}.png`,
+        minZoom:6, maxZoom:14, tileSize:256, opacity:0.7,
+        ...(ilceFeat ? {
+          extensions: [new MaskExtension()],
+          maskId: `mm-mask-${ilceAdi}`,
+        } : {}),
+        renderSubLayers: p => {
+          const {west,south,east,north}=p.tile.bbox;
+          return new BitmapLayer(p,{
+            data:null,
+            image:p.data,
+            bounds:[west,south,east,north],
+            parameters:{depthTest:false},
+            extensions: p.extensions,
+            maskId: p.maskId
+          });
+        },
+      }),
+
+      // 3. Görünmez Etkileşimli Vektör Katmanı (Sadece hover/tooltip verisi için)
       ...(polyData ? [
         new GeoJsonLayer({
-          id:`mm-poly-fill-${ilceAdi}-${t}`,
+          id:`mm-poly-hover-${ilceAdi}-${t}`,
           data:polyData,
           pickable:true,
           filled:true,
           stroked:false,
-          getFillColor: f => {
-            const sinif = f.properties?.sinif ?? 3;
-            const cRgb = S_RENK_RGB[sinif] || [128,128,128];
-            return [...cRgb, 145];
-          },
+          getFillColor: [0, 0, 0, 0], // Şeffaf
           parameters:{depthTest:false},
         })
       ] : []),
