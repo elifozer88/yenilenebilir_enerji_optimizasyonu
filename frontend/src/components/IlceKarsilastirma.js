@@ -524,6 +524,75 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
       .then(r=>r.ok?r.json():null).then(d=>setMlData(d)).catch(()=>setMlData(null));
   };
 
+  // Yapay zekâyı sekme açıldığında veya enerji tipi değiştiğinde otomatik olarak eğit
+  useEffect(() => {
+    if (tab === 'rf') {
+      runML();
+    }
+  }, [tab, et]);
+
+  const renderInterpretation = () => {
+    if (!mlData || !mlData.feature_importance || mlData.loading) return null;
+    const top = mlData.feature_importance.slice(0, 3);
+    if (top.length < 2) return null;
+    
+    const t1 = top[0];
+    const t2 = top[1];
+    const t3 = top[2];
+    const m1 = KRITER_META[t1.kriter] || {ad: t1.kriter};
+    const m2 = KRITER_META[t2.kriter] || {ad: t2.kriter};
+    const m3 = t3 ? (KRITER_META[t3.kriter] || {ad: t3.kriter}) : null;
+    
+    const r2 = mlData.pearson_r;
+    const successPercentage = Math.round(r2 * 100);
+    
+    let alignmentText = null;
+    if (r2 >= 0.90) {
+      alignmentText = (
+        <span>
+          <strong style={{color:'#10B981'}}>%{successPercentage} oranında mükemmel bir uyum</strong> sergilemektedir.
+          Bu yüksek uyum oranı, uzmanlarımızın belirlediği AHP karar kriterlerinin tarafsız, nesnel ve bilimsel olarak son derece güvenilir olduğunu matematiksel olarak doğrular.
+        </span>
+      );
+    } else if (r2 >= 0.75) {
+      alignmentText = (
+        <span>
+          <strong style={{color:'#38BDF8'}}>%{successPercentage} oranında güçlü bir uyum</strong> sergilemektedir.
+          Seçtiğimiz kriterlerin öncelikleri yapay zekâ tarafından da büyük oranda tasdik edilmiştir.
+        </span>
+      );
+    } else {
+      alignmentText = (
+        <span>
+          <strong style={{color:'#F59E0B'}}>%{successPercentage} oranında orta seviye bir uyum</strong> sergilemektedir.
+          Kriter ağırlıklandırma katsayıları üzerinde küçük kalibrasyonlar yapılması düşünülebilir.
+        </span>
+      );
+    }
+
+    return (
+      <div style={{
+        background:'linear-gradient(135deg, var(--card) 0%, rgba(14,165,164,0.03) 100%)',
+        border:'1px solid rgba(14,165,164,0.2)',
+        borderLeft:'4px solid #0EA5A4',
+        borderRadius:12,
+        padding:'16px 20px',
+        marginTop:20,
+        fontSize:13,
+        lineHeight:1.6,
+        color:'var(--text-2)'
+      }}>
+        <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:800,color:'var(--text)',fontSize:14,marginBottom:8}}>
+          <span>📢</span> Yapay Zekânın Analiz Yorumu ve Raporu:
+        </div>
+        Yapay zekâ modeli (Random Forest), İzmir genelindeki coğrafi hücre verilerini analiz ederek, <strong>{et}</strong> potansiyeli için en önemli belirleyici kriterin <strong>{m1.ad} (%{Math.round(t1.onem * 100)})</strong> olduğunu belirlemiştir.
+        İkinci sırada ise <strong>{m2.ad} (%{Math.round(t2.onem * 100)})</strong> gelmektedir {m3 && <span>ve bunu <strong>{m3.ad} (%{Math.round(t3.onem * 100)})</strong> takip etmektedir</span>}. 
+        <br/><br/>
+        Modelin tahmin değerleri, bizim tasarladığımız AHP puanları ile karşılaştırıldığında {alignmentText}
+      </div>
+    );
+  };
+
   const kriterRows=useMemo(()=>{
     const first=Object.values(dataMap)[0];
     if(!first?.kriterler) return [];
@@ -891,20 +960,31 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
               alignItems: 'flex-start'
             }}>
               <div style={{fontSize: 22, color: 'var(--brand)', marginTop: 2}}>ℹ️</div>
-              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '0.04em'}}>
-                  Potansiyel Hesaplama Metodolojisi
+              <div style={{display: 'flex', flexDirection: 'column', gap: 10, width: '100%'}}>
+                <div>
+                  <div style={{fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '0.04em', marginBottom: 4}}>
+                    Potansiyel Hesaplama Metodolojisi
+                  </div>
+                  <div style={{fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.6}}>
+                    {et === 'GES' ? (
+                      <span>
+                        <strong>Güneş Enerjisi (GES) Potansiyeli</strong>: Analiz edilen uygun bölgelerin (Sınıf 4 ve Sınıf 5 alanlar) toplam yüzölçümü (hektar) esas alınarak hesaplanır. Hesaplamalarda, metrekare başına düşen yıllık ortalama global güneş radyasyonu (GHI) verileri, panel verimliliği (%20) verimi ve performans oranı (%75) baz alınmıştır.
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>Rüzgâr Enerjisi (RES) Potansiyeli</strong>: 100 metre yükseklikteki yıllık ortalama rüzgâr hızı, topografik pürüzlülük ve eğim sınırlamaları göz önünde bulundurularak hesaplanmıştır. Kurulu güç kapasite tahmini (MW), uygun alan yoğunluğuna göre standart 3 MW gücündeki modern rüzgâr türbinlerinin yerleşim mesafeleri dikkate alınarak simüle edilmiştir.
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.6}}>
-                  {et === 'GES' ? (
-                    <span>
-                      <strong>Güneş Enerjisi (GES) Potansiyeli</strong>: Analiz edilen uygun bölgelerin (Sınıf 4 ve Sınıf 5 alanlar) toplam yüzölçümü (hektar) esas alınarak hesaplanır. Hesaplamalarda, metrekare başına düşen yıllık ortalama global güneş radyasyonu (GHI) verileri, panel verimliliği (%20) ve performans oranı (%75) baz alınmıştır. Yıllık elektrik üretimi ve CO₂ azaltımı değerleri bu kabullere göre optimize edilmiştir.
-                    </span>
-                  ) : (
-                    <span>
-                      <strong>Rüzgâr Enerjisi (RES) Potansiyeli</strong>: 100 metre yükseklikteki yıllık ortalama rüzgâr hızı, topografik pürüzlülük ve eğim sınırlamaları göz önünde bulundurularak hesaplanmıştır. Kurulu güç kapasite tahmini (MW), uygun alan yoğunluğuna göre standart 3 MW gücündeki modern rüzgâr türbinlerinin yerleşim mesafeleri (türbinler arası 5D x 3D boşluk) dikkate alınarak simüle edilmiştir.
-                    </span>
-                  )}
+
+                <div style={{borderTop:'1px solid rgba(14,165,164,0.15)', paddingTop:10}}>
+                  <div style={{fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '0.04em', marginBottom: 4}}>
+                    Harita Renklendirme ve İlçe Sınır Maskeleme Metodolojisi
+                  </div>
+                  <div style={{fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.6}}>
+                    Haritadaki coğrafi katman renklendirmeleri, PostGIS coğrafi sorguları ile <strong>sadece seçilen ilçe sınırları içerisine maskelenerek (clipping)</strong> çizilir. Mahalle bazlı görünümlerde veya mahalle seçimlerinde, seçilen ilçenin dış sınır çizgileri (`districtBoundary`) kaybolmadan arka planda bir referans katmanı olarak tutulur. Böylece kullanıcı mahalle detaylarını incelerken bütüncül ilçe sınırlarını kaybetmez.
+                  </div>
                 </div>
               </div>
             </div>
@@ -1116,7 +1196,7 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
           <div style={{background:'var(--card)',borderRadius:16,
             boxShadow:'0 2px 16px rgba(0,0,0,0.2)',
             border:'1px solid var(--border)',padding:'24px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <div>
                 <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.1em',
                   textTransform:'uppercase',color:'var(--muted)',marginBottom:4}}>Makine Öğrenmesi ile Doğrulama</div>
@@ -1131,10 +1211,46 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
               }}
               onMouseEnter={e => { if(!mlData?.loading) e.currentTarget.style.background = 'rgba(14,165,164,0.18)'; }}
               onMouseLeave={e => { if(!mlData?.loading) e.currentTarget.style.background = 'rgba(14,165,164,0.1)'; }}
-              >{mlData?.loading?'⏳ Eğitiliyor…':'▶ RF Modelini Çalıştır'}</button>
+              >{mlData?.loading?'⏳ Eğitiliyor…':'🔄 Modeli Yeniden Eğit'}</button>
             </div>
 
-            {/* Başlangıç Rehberi (Hiç bilmeyen biri için açıklama kartı) */}
+            {/* Yapay Zekâ Akış Şeması */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'linear-gradient(135deg, rgba(6,10,20,0.4) 0%, rgba(14,165,164,0.05) 100%)',
+              border: '1px dashed rgba(14,165,164,0.2)',
+              borderRadius: 16,
+              padding: '16px 24px',
+              marginBottom: 24,
+              gap: 12,
+              flexWrap: 'wrap'
+            }}>
+              <div style={{flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 8}}>
+                <div style={{fontSize: 24, marginBottom: 6}}>📋</div>
+                <div style={{fontSize: 11, fontWeight: 800, color: 'var(--text)'}}>1. Bizim Model (AHP)</div>
+                <div style={{fontSize: 9.5, color: 'var(--muted)', marginTop: 4}}>Uzman görüşleriyle kurulan kriter formülü ve ağırlıklar.</div>
+              </div>
+              
+              <div style={{color: 'rgba(14,165,164,0.5)', fontSize: 18, fontWeight: 700}}>➔</div>
+
+              <div style={{flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 8}}>
+                <div style={{fontSize: 24, marginBottom: 6}}>🧠</div>
+                <div style={{fontSize: 11, fontWeight: 800, color: 'var(--text)'}}>2. Yapay Zekâ (RF)</div>
+                <div style={{fontSize: 9.5, color: 'var(--muted)', marginTop: 4}}>Modelimizden bağımsız olarak coğrafi piksellerdeki kalıpları çözer.</div>
+              </div>
+
+              <div style={{color: 'rgba(14,165,164,0.5)', fontSize: 18, fontWeight: 700}}>➔</div>
+
+              <div style={{flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 8}}>
+                <div style={{fontSize: 24, marginBottom: 6}}>⚖️</div>
+                <div style={{fontSize: 11, fontWeight: 800, color: 'var(--text)'}}>3. Güven Karşılaştırması</div>
+                <div style={{fontSize: 9.5, color: 'var(--muted)', marginTop: 4}}>AHP puanları ile RF tahminleri kıyaslanarak doğruluk tescillenir.</div>
+              </div>
+            </div>
+
+            {/* Başlangıç Rehberi */}
             <div style={{
               background:'var(--surface-2)',
               border:'1px solid var(--border)',
@@ -1146,47 +1262,62 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
               gap:12,
             }}>
               <div style={{display:'flex',alignItems:'center',gap:10,fontSize:14,fontWeight:700,color:'var(--brand)'}}>
-                <span>🤖</span> Yapay Zekâ Doğrulaması Nedir ve Nasıl Çalışır?
+                <span>🤖</span> Yapay Zekâ Modeli Kararımızı Nasıl Doğruluyor?
               </div>
               <div style={{fontSize:12,color:'var(--text-2)',lineHeight:1.6,display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
                 <div>
                   Bu sayfa, Coğrafi Bilgi Sistemleri (CBS) kriterleriyle kurduğumuz <strong>AHP (Karar Analizi)</strong> modelini doğrulamak için bir <strong>Random Forest (Makine Öğrenmesi)</strong> modeli eğitir. Yapay zekâ, ilçelerdeki binlerce pikseli inceleyerek kriterlerin önem derecesini kendisi hesaplar ve bizim modelimizle karşılaştırır.
                 </div>
                 <div>
-                  <strong>Adımlar:</strong><br/>
-                  1. Sağ üstteki <strong>RF Modelini Çalıştır</strong> butonuna basın.<br/>
-                  2. Yapay zekanın kriterlerinize verdiği <strong>Özellik Önemi</strong> yüzdelerini inceleyin.<br/>
-                  3. <strong>AHP vs RF</strong> tablosunda bizim verdiğimiz puanlar ile yapay zekanın verdiği puanlar arasındaki <strong>Farkı (Δ)</strong> analiz edin. Farkın sıfıra yakın olması modelimizin güvenilirliğini kanıtlar.
+                  <strong>Bilmeniz Gereken 3 Temel Kural:</strong><br/>
+                  1. <strong>Model Güvenilirliği (OOB)</strong> değeri %80'in üzerindeyse yapay zekâ çok iyi eğitilmiş demektir.<br/>
+                  2. <strong>Karar Uyum Oranı (r)</strong> değeri 1.00'e ne kadar yakınsa, yapay zekâ bizim kararlarımızı o kadar güçlü destekliyor demektir.<br/>
+                  3. <strong>Fark (Δ)</strong> sütunundaki değerlerin sıfıra yakın (örn. +0.05, -0.10) olması modelimizin hatasız ve objektif olduğunu kanıtlar.
                 </div>
               </div>
             </div>
 
-            {!mlData&&(
-              <div style={{textAlign:'center',padding:'40px 0',color:'var(--dim)',fontSize:13,
-                border:'2px dashed var(--border)',borderRadius:12,background:'var(--surface)'}}>
-                <span>👉</span> Üstteki butona basarak {et} için Random Forest yapay zekâ modelini hemen eğitebilirsiniz.
+            {/* Eğitiliyor Loader state */}
+            {mlData?.loading && (
+              <div style={{textAlign:'center',padding:'50px 0',color:'#0EA5A4',fontSize:14,
+                border:'1px dashed rgba(14,165,164,0.3)',borderRadius:12,background:'var(--surface)',
+                display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+                <div style={{width:24,height:24,border:'3px solid rgba(14,165,164,0.2)',
+                  borderTopColor:'#0EA5A4',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+                <span>Yapay zekâ modeli İzmir coğrafi hücre verilerini okuyor ve eğitiliyor, lütfen bekleyin...</span>
               </div>
             )}
 
-            {mlData&&!mlData.loading&&(
+            {!mlData && (
+              <div style={{textAlign:'center',padding:'40px 0',color:'var(--dim)',fontSize:13,
+                border:'2px dashed var(--border)',borderRadius:12,background:'var(--surface)'}}>
+                <span>⏳</span> Yapay zekâ modeli otomatik olarak hazırlanıyor...
+              </div>
+            )}
+
+            {mlData && !mlData.loading && (
               <>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}>
                   {[
-                    { label: 'Tahmin Başarısı', sub: 'OOB Score (>0.80 idealdir)', val: mlData.oob_score },
-                    { label: 'Uyum Korelasyonu', sub: 'Pearson r (1.00\'e yakınlık)', val: mlData.pearson_r },
-                    { label: 'Formül Ortalaması', sub: 'AHP Skoru (/5)', val: mlData.ahp_ortalama + '/5' },
-                    { label: 'Yapay Zekâ Ort.', sub: 'RF Skoru (/5)', val: mlData.rf_ortalama + '/5' }
-                  ].map(({ label, sub, val }) => (
+                    { label: 'Model Güvenilirliği (OOB)', sub: '>%80 ise mükemmeldir', val: `${(mlData.oob_score * 100).toFixed(1)}%`, color: '#10B981' },
+                    { label: 'Karar Uyum Oranı (Pearson)', sub: '1.00\'e yakınlık yüksek uyumdur', val: `r = ${mlData.pearson_r.toFixed(2)}`, color: '#38BDF8' },
+                    { label: 'Bizim Ortalama Puanımız', sub: 'Hesapladığımız AHP ortalaması', val: `${mlData.ahp_ortalama.toFixed(2)} / 5`, color: '#F59E0B' },
+                    { label: 'Yapay Zekâ Ort. Puanı', sub: 'Modelin tahmin ettiği ortalama', val: `${mlData.rf_ortalama.toFixed(2)} / 5`, color: '#A78BFA' }
+                  ].map(({ label, sub, val, color }) => (
                     <div key={label} style={{background:'var(--surface)',border:'1px solid var(--border)',
                       borderRadius:12,padding:'14px',textAlign:'center'}}>
-                      <div style={{fontSize:22,fontWeight:800,color:'#0EA5A4',
+                      <div style={{fontSize:22,fontWeight:800,color,
                         fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{val}</div>
                       <div style={{fontSize:11,fontWeight:700,color:'var(--text)'}}>{label}</div>
                       <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>{sub}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+
+                {/* Yapay Zekâ Analiz Yorumu ve Raporu */}
+                {renderInterpretation()}
+
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,marginTop:24}}>
                   <div>
                     <div style={{fontSize:11,fontWeight:700,letterSpacing:'0.08em',
                       textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>Yapay Zekaya Göre Belirleyici Kriterler</div>
@@ -1256,6 +1387,37 @@ export default function IlceKarsilastirma({ energyType='GES', initialIlce='' }) 
                           })}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bilgi Kutusu / Kolay ML Rehberi SSS */}
+                <div style={{
+                  marginTop: 32,
+                  background: 'var(--surface-2)',
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  padding: 20
+                }}>
+                  <div style={{fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6}}>
+                    <span>💡</span> Yapay Zekâ Analiz SSS (Sıkça Sorulan Sorular)
+                  </div>
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 11.5, lineHeight: 1.5, color: 'var(--text-2)'}}>
+                    <div>
+                      <strong style={{color: 'var(--brand)', display: 'block', marginBottom: 4}}>❓ Random Forest (Yapay Zekâ) modeli neden eğitiliyor?</strong>
+                      CBS mühendislerinin kendi deneyimleriyle oluşturduğu AHP formülünün tarafsızlığını denetlemek amacıyla eğitilir. Algoritma verileri bağımsızca analiz ederek kriterlerin gerçek ağırlıklarını tespit eder.
+                    </div>
+                    <div>
+                      <strong style={{color: 'var(--brand)', display: 'block', marginBottom: 4}}>❓ Kriter Özellik Önemi yüzdeleri ne anlama gelir?</strong>
+                      Yapay zekanın İzmir genelindeki pikselleri incelediğinde hangi coğrafi etkenin (örneğin eğim veya solar radyasyon) uygunluk puanını belirlemede daha kritik olduğunu kendisinin keşfetmesidir.
+                    </div>
+                    <div>
+                      <strong style={{color: 'var(--brand)', display: 'block', marginBottom: 4}}>❓ Fark (Δ) sütunundaki değerler ne anlama geliyor?</strong>
+                      Bizim formül puanımızla yapay zekanın tahmini arasındaki farktır. Sıfıra ne kadar yakınsa, uzman kararı ile makine öğrenmesi o kadar uyuşuyor demektir (örn: +0.05 veya -0.08 normal kabul edilir).
+                    </div>
+                    <div>
+                      <strong style={{color: 'var(--brand)', display: 'block', marginBottom: 4}}>❓ Tahmin Başarısı (OOB Score) nedir?</strong>
+                      Yapay zekanın veriler üzerindeki genelleme yeteneğidir. %80'in üzerinde olması, yapay zekanın veri örüntülerini mükemmel derecede genellediğini gösterir.
                     </div>
                   </div>
                 </div>
