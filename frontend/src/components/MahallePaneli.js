@@ -14,6 +14,8 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
   const [showSantraller,  setShowSantraller]  = useState(false);
   const [santralData,     setSantralData]     = useState(null);
   const [santralLoading,  setSantralLoading]  = useState(false);
+  const [activeRightTab,  setActiveRightTab]  = useState('mahalle');
+  const [selectedSantral, setSelectedSantral] = useState(null);
 
   useEffect(() => {
     if (!ilceAdi || done === ilceAdi + et) return;
@@ -30,11 +32,17 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
     setShowSantraller(false);
     setSelectedMahalle(null);
     setMapCenter(null);
+    setActiveRightTab('mahalle');
+    setSelectedSantral(null);
   }, [ilceAdi, et]);
 
   const toggleSantraller = () => {
     const next = !showSantraller;
     setShowSantraller(next);
+    if (!next) {
+      setActiveRightTab('mahalle');
+      setSelectedSantral(null);
+    }
     if (next && !santralData) {
       setSantralLoading(true);
       // /santral/list cek, frontend'de ilceye gore filtrele
@@ -181,6 +189,8 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
             mahalleFeature={selectedMahalle!==null?sorted[selectedMahalle]:null}
             santralData={santralData}
             showSantraller={showSantraller}
+            selectedSantral={selectedSantral}
+            onSelectSantral={setSelectedSantral}
           />
 
           {/* Santral yok bildirimi */}
@@ -216,59 +226,152 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
           )}
         </div>
 
-        {/* Mahalle tablosu */}
-        <div style={{overflowY:'auto',maxHeight:380}}>
-          {sorted.length===0&&!loading&&(
-            <div style={{textAlign:'center',padding:'32px',color:'var(--muted)',fontSize:12}}>
-              {done?'OSM mahalle verisi bulunamadı.':'Yükleniyor…'}
+        {/* Mahalle / Santral tablosu */}
+        <div style={{display:'flex',flexDirection:'column',height:380,overflow:'hidden'}}>
+          {showSantraller && (
+            <div style={{
+              display: 'flex', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-2)', position: 'sticky', top: 0, zIndex: 10
+            }}>
+              <button
+                onClick={() => setActiveRightTab('mahalle')}
+                style={{
+                  flex: 1, padding: '10px', fontSize: 11, fontWeight: 700,
+                  color: activeRightTab === 'mahalle' ? color : 'var(--muted)',
+                  background: activeRightTab === 'mahalle' ? 'var(--card)' : 'transparent',
+                  border: 'none', borderBottom: activeRightTab === 'mahalle' ? `2px solid ${color}` : '2px solid transparent',
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s'
+                }}
+              >
+                Mahalle Listesi
+              </button>
+              <button
+                onClick={() => setActiveRightTab('santral')}
+                style={{
+                  flex: 1, padding: '10px', fontSize: 11, fontWeight: 700,
+                  color: activeRightTab === 'santral' ? SANTRAL_HEX[et] : 'var(--muted)',
+                  background: activeRightTab === 'santral' ? 'var(--card)' : 'transparent',
+                  border: 'none', borderBottom: activeRightTab === 'santral' ? `2px solid ${SANTRAL_HEX[et]}` : '2px solid transparent',
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s'
+                }}
+              >
+                Kurulu Santraller ({santralCount})
+              </button>
             </div>
           )}
-          {sorted.length>0&&(
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-              <thead><tr style={{background:'var(--surface)',position:'sticky',top:0}}>
-                {['#','Mahalle','Skor','Ha','MW'].map(h=>(
-                  <th key={h} style={{padding:'9px 10px',
-                    textAlign:h==='Mahalle'?'left':'center',
-                    fontSize:9.5,fontWeight:700,letterSpacing:'0.07em',
-                    color:'var(--muted)',textTransform:'uppercase',
-                    borderBottom:'1px solid var(--border)'}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {sorted.slice(0,30).map((f,i)=>{
-                  const p=f.properties,s=p.skor_ort||0;
-                  const rc=skorRenk(s);
-                  const isSel=selectedMahalle===i;
-                  return(
-                    <tr key={i} onClick={()=>handleMahalleClick(f,i)}
-                      style={{borderBottom:'1px solid var(--border)',
-                        background:isSel?`${color}15`:'transparent',
-                        cursor:'pointer',transition:'background 0.12s'}}
-                      onMouseEnter={e=>{if(!isSel) e.currentTarget.style.background='var(--surface-2)';}}
-                      onMouseLeave={e=>{e.currentTarget.style.background=isSel?`${color}15`:'transparent';}}>
-                      <td style={{padding:'7px 10px',textAlign:'center',
-                        color:isSel?color:'var(--dim)',fontSize:10,fontWeight:isSel?700:400}}>{i+1}</td>
-                      <td style={{padding:'7px 10px',fontWeight:isSel?700:500,
-                        color:isSel?color:'var(--text)'}}>{p.mahalle}</td>
-                      <td style={{padding:'7px 10px',textAlign:'center'}}>
-                        <span style={{fontWeight:800,color:rc,fontFamily:'JetBrains Mono,monospace'}}>
-                          {s.toFixed(2)}
-                        </span>
-                      </td>
-                      <td style={{padding:'7px 10px',textAlign:'center',
-                        color:'var(--text-2)',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>
-                        {(p.uygun_alan_ha||0).toLocaleString('tr')}
-                      </td>
-                      <td style={{padding:'7px 10px',textAlign:'center',
-                        color:'#0EA5A4',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>
-                        {(p.tahmini_mw||0).toFixed(1)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+
+          <div style={{overflowY:'auto',flex:1}}>
+            {activeRightTab === 'mahalle' ? (
+              <>
+                {sorted.length===0&&!loading&&(
+                  <div style={{textAlign:'center',padding:'32px',color:'var(--muted)',fontSize:12}}>
+                    {done?'OSM mahalle verisi bulunamadı.':'Yükleniyor…'}
+                  </div>
+                )}
+                {sorted.length>0&&(
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                    <thead><tr style={{background:'var(--surface)',position:'sticky',top:0}}>
+                      {['#','Mahalle','Skor','Ha','MW'].map(h=>(
+                        <th key={h} style={{padding:'9px 10px',
+                          textAlign:h==='Mahalle'?'left':'center',
+                          fontSize:9.5,fontWeight:700,letterSpacing:'0.07em',
+                          color:'var(--muted)',textTransform:'uppercase',
+                          borderBottom:'1px solid var(--border)'}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {sorted.slice(0,30).map((f,i)=>{
+                        const p=f.properties,s=p.skor_ort||0;
+                        const rc=skorRenk(s);
+                        const isSel=selectedMahalle===i;
+                        return(
+                          <tr key={i} onClick={()=>handleMahalleClick(f,i)}
+                            style={{borderBottom:'1px solid var(--border)',
+                              background:isSel?`${color}15`:'transparent',
+                              cursor:'pointer',transition:'background 0.12s'}}
+                            onMouseEnter={e=>{if(!isSel) e.currentTarget.style.background='var(--surface-2)';}}
+                            onMouseLeave={e=>{e.currentTarget.style.background=isSel?`${color}15`:'transparent';}}>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:isSel?color:'var(--dim)',fontSize:10,fontWeight:isSel?700:400}}>{i+1}</td>
+                            <td style={{padding:'7px 10px',fontWeight:isSel?700:500,
+                              color:isSel?color:'var(--text)'}}>{p.mahalle}</td>
+                            <td style={{padding:'7px 10px',textAlign:'center'}}>
+                              <span style={{fontWeight:800,color:rc,fontFamily:'JetBrains Mono,monospace'}}>
+                                {s.toFixed(2)}
+                              </span>
+                            </td>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:'var(--text-2)',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>
+                              {(p.uygun_alan_ha||0).toLocaleString('tr')}
+                            </td>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:'#0EA5A4',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>
+                              {(p.tahmini_mw||0).toFixed(1)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            ) : (
+              <>
+                {santralCount===0&&!santralLoading&&(
+                  <div style={{textAlign:'center',padding:'32px',color:'var(--muted)',fontSize:12}}>
+                    Bu ilçede kurulu {et} santrali bulunamadı.
+                  </div>
+                )}
+                {santralCount>0&&(
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                    <thead><tr style={{background:'var(--surface)',position:'sticky',top:0}}>
+                      {['#','Santral Adı','Kapasite','Operatör'].map(h=>(
+                        <th key={h} style={{padding:'9px 10px',
+                          textAlign:h==='Santral Adı'?'left':'center',
+                          fontSize:9.5,fontWeight:700,letterSpacing:'0.07em',
+                          color:'var(--muted)',textTransform:'uppercase',
+                          borderBottom:'1px solid var(--border)'}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {santralData?.features?.map((f,i)=>{
+                        const p=f.properties;
+                        const ad=p.santral_adi?.startsWith('OSM-')
+                          ? (et==='GES'?'Güneş Enerji Santrali':'Rüzgâr Enerji Santrali')
+                          : p.santral_adi;
+                        const isSel=selectedSantral===f;
+                        return(
+                          <tr key={i} onClick={()=>{
+                            setSelectedSantral(f);
+                            if(f.geometry?.coordinates) {
+                              const [lon,lat]=f.geometry.coordinates;
+                              setMapCenter({lon,lat,zoom:14,label:'santral',sinif:4,alan_ha:0});
+                            }
+                          }}
+                            style={{borderBottom:'1px solid var(--border)',
+                              background:isSel?`${SANTRAL_HEX[et]}15`:'transparent',
+                              cursor:'pointer',transition:'background 0.12s'}}
+                            onMouseEnter={e=>{if(!isSel) e.currentTarget.style.background='var(--surface-2)';}}
+                            onMouseLeave={e=>{e.currentTarget.style.background=isSel?`${SANTRAL_HEX[et]}15`:'transparent';}}>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:isSel?SANTRAL_HEX[et]:'var(--dim)',fontSize:10,fontWeight:isSel?700:400}}>{i+1}</td>
+                            <td style={{padding:'7px 10px',fontWeight:isSel?700:500,
+                              color:isSel?SANTRAL_HEX[et]:'var(--text)'}}>{ad}</td>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:SANTRAL_HEX[et],fontFamily:'JetBrains Mono,monospace',fontSize:11,fontWeight:700}}>
+                              {p.kapasite_mw?`${p.kapasite_mw.toFixed(1)} MW`:'Bilinmiyor'}
+                            </td>
+                            <td style={{padding:'7px 10px',textAlign:'center',
+                              color:'var(--text-2)',fontSize:11}}>{p.operator==='—'?'Bilinmiyor':p.operator}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

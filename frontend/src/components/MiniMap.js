@@ -40,7 +40,9 @@ export default function MiniMap({
   highlightPoint=null,
   mahalleFeature=null,
   santralData=null,
-  showSantraller=false
+  showSantraller=false,
+  selectedSantral=null,
+  onSelectSantral=null
 }) {
   const [viewState, setViewState] = useState({longitude:27.05,latitude:38.42,zoom:9,pitch:0,bearing:0});
   const [ilceFeat,  setIlceFeat]  = useState(null);
@@ -142,24 +144,6 @@ export default function MiniMap({
         }),
       ] : []),
 
-      // Mevcut kurulu santraller
-      ...(showSantraller && santralData?.features ? [
-        new ScatterplotLayer({
-          id:`mm-santraller-${ilceAdi}-${t}`,
-          data:santralData.features,
-          getPosition: d => d.geometry.coordinates,
-          getRadius: 160,
-          radiusMinPixels: 5.5,
-          radiusMaxPixels: 14,
-          getFillColor: t === 'ges' ? [251, 191, 36, 230] : [56, 189, 248, 230],
-          getLineColor: [255, 255, 255, 200],
-          lineWidthMinPixels: 1.2,
-          stroked: true,
-          pickable: true,
-          parameters:{depthTest:false},
-        })
-      ] : []),
-
       // Aktif pin (max veya min nokta) — mahalle modunda gösterme
       ...(activePin && !mahalleFeature ? [
         // Dış halka — pulse efekti için büyük çember
@@ -201,6 +185,33 @@ export default function MiniMap({
         }),
       ] : []),
 
+      // Mevcut kurulu santraller (Katman sıralaması: Mahalle dolgusunun üstüne)
+      ...(showSantraller && santralData?.features ? [
+        new ScatterplotLayer({
+          id:`mm-santraller-${ilceAdi}-${t}`,
+          data:santralData.features,
+          getPosition: d => d.geometry.coordinates,
+          getRadius: 160,
+          radiusMinPixels: 5.5,
+          radiusMaxPixels: 14,
+          getFillColor: d => d === selectedSantral ? [255, 255, 255, 255] : (t === 'ges' ? [251, 191, 36, 230] : [56, 189, 248, 230]),
+          getLineColor: d => d === selectedSantral ? (t === 'ges' ? [251, 191, 36, 255] : [56, 189, 248, 255]) : [255, 255, 255, 200],
+          lineWidthMinPixels: 1.2,
+          stroked: true,
+          pickable: true,
+          onClick: ({ object }) => {
+            if (onSelectSantral) {
+              onSelectSantral(object || null);
+            }
+          },
+          updateTriggers: {
+            getFillColor: [selectedSantral],
+            getLineColor: [selectedSantral],
+          },
+          parameters:{depthTest:false},
+        })
+      ] : []),
+
       // Etiketler
       new TileLayer({
         id:`mm-labels-${ilceAdi}`,
@@ -212,7 +223,7 @@ export default function MiniMap({
         },
       }),
     ];
-  }, [ilceAdi, energyType, ilceFeat, polyData, rgb, activePin, mahalleFeature, santralData, showSantraller]);
+  }, [ilceAdi, energyType, ilceFeat, polyData, rgb, activePin, mahalleFeature, santralData, showSantraller, selectedSantral, onSelectSantral]);
 
   const getTooltip = ({ object }) => {
     if (!object?.properties) return null;
@@ -312,6 +323,45 @@ export default function MiniMap({
             background:'transparent',color:'#8892aa',
             fontFamily:'inherit',fontSize:10,cursor:'pointer',
           }}>✕ Geri dön</button>
+        </div>
+      )}
+
+      {/* Seçili santral bilgi kartı */}
+      {selectedSantral && (
+        <div style={{
+          position:'absolute',top:8,right:8,zIndex:15,
+          width:220, background:'rgba(6,10,20,0.95)',backdropFilter:'blur(8px)',
+          borderRadius:10, border:`1px solid ${energyType==='GES'?'#F59E0B':'#38BDF8'}50`,
+          borderTop:`3px solid ${energyType==='GES'?'#F59E0B':'#38BDF8'}`,
+          boxShadow:'0 8px 24px rgba(0,0,0,0.5)',
+          padding:'10px 12px',
+        }}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+            <div style={{fontSize:11,fontWeight:800,color:'#fff',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:170}}>
+              {selectedSantral.properties.santral_adi?.startsWith('OSM-')
+                ? (energyType==='GES'?'Güneş Enerji Santrali':'Rüzgâr Enerji Santrali')
+                : selectedSantral.properties.santral_adi}
+            </div>
+            <button onClick={() => onSelectSantral && onSelectSantral(null)} style={{
+              background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',
+              width:18,height:18,borderRadius:4,cursor:'pointer',fontSize:11,lineHeight:1,
+              display:'flex',alignItems:'center',justifyContent:'center'
+            }}>×</button>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:10}}>
+              <span style={{color:'#8892aa'}}>Kapasite:</span>
+              <span style={{color:energyType==='GES'?'#F59E0B':'#38BDF8',fontWeight:700}}>
+                {selectedSantral.properties.kapasite_mw ? `${selectedSantral.properties.kapasite_mw.toFixed(1)} MW` : 'Bilinmiyor'}
+              </span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:10}}>
+              <span style={{color:'#8892aa'}}>Operatör:</span>
+              <span style={{color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:120,textAlign:'right'}}>
+                {selectedSantral.properties.operator === '—' ? 'Bilinmiyor' : selectedSantral.properties.operator}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
