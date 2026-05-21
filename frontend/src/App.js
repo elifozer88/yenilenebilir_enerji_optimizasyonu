@@ -191,7 +191,7 @@ export default function App() {
   const [ilceler,          setIlceler]          = useState([]);
   const [havaDetay,        setHavaDetay]        = useState(null);
   const [rankedDistricts,  setRankedDistricts]  = useState([]);
-  const minScore = 1;
+  const minScore = 4;
 
   const heroOverlayLeft   = theme === 'light'
     ? 'linear-gradient(100deg, rgba(248,250,252,0.65) 0%, rgba(248,250,252,0.45) 38%, rgba(248,250,252,0.10) 65%, rgba(248,250,252,0.0) 100%)'
@@ -695,13 +695,16 @@ export default function App() {
               {/* Uygunluk Skalası */}
               <div className="sidebar-section">
                 <div className="sidebar-label">Uygunluk Skalası</div>
+                <div style={{fontSize:10.5,color:'var(--muted)',marginBottom:10,lineHeight:1.4,padding:'6px 8px',background:'var(--surface-2)',borderRadius:6,border:'1px solid var(--border)'}}>
+                  ℹ️ Haritada göz yormaması için sadece Sınıf 4 ve 5 gösterilmektedir.
+                </div>
                 {[
-                  {label:'Çok Uygun', range:'4.0–5.0', color:'#14803C'},
-                  {label:'Uygun',     range:'3.0–4.0', color:'#4AA635'},
-                  {label:'Orta',      range:'2.0–3.0', color:'#D97706'},
-                  {label:'Düşük',     range:'1.0–2.0', color:'#B91C1C'},
+                  {label:'Çok Uygun', range:'4.0–5.0', color:'#14803C', active: true},
+                  {label:'Uygun',     range:'3.0–4.0', color:'#4AA635', active: true},
+                  {label:'Orta',      range:'2.0–3.0', color:'#D97706', active: false},
+                  {label:'Düşük',     range:'1.0–2.0', color:'#B91C1C', active: false},
                 ].map(item => (
-                  <div key={item.label} className="legend-item">
+                  <div key={item.label} className="legend-item" style={{opacity: item.active ? 1 : 0.35, display: 'flex', alignItems: 'center', transition: 'opacity 0.2s'}}>
                     <div className="legend-dot" style={{background:item.color}}/>
                     <span className="legend-text">{item.label}</span>
                     <span className="legend-range">{item.range}</span>
@@ -719,7 +722,7 @@ export default function App() {
                 padding:'8px 16px', display:'flex', justifyContent:'space-between', alignItems:'center',
                 fontSize:11, color:'var(--muted)', fontFamily:"'Manrope',sans-serif",
               }}>
-                <span style={{fontWeight:600,color:'var(--text-2)'}}>Uygunluk Atlası — İzmir</span>
+                <span style={{fontWeight:600,color:'var(--text-2)'}}>Uygunluk Atlası — İzmir · Sınıf 4–5</span>
                 <span>EPSG:32635 · 100m · AHP</span>
               </div>
 
@@ -752,8 +755,8 @@ export default function App() {
                 <div style={{fontSize:10,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'var(--muted)',marginBottom:7}}>
                   UYGUNLUK SKORU · {energyType}
                 </div>
-                <div style={{display:'flex',height:8,borderRadius:4,overflow:'hidden',width:160,marginBottom:5}}>
-                  {['#B91C1C','#DC6B2E','#D97706','#4AA635','#14803C'].map((c,i) => (
+                <div style={{display:'flex',height:8,borderRadius:4,overflow:'hidden',width:120,marginBottom:5}}>
+                  {['#4AA635','#14803C'].map((c,i) => (
                     <div key={i} style={{flex:1,height:'100%',background:c}}/>
                   ))}
                 </div>
