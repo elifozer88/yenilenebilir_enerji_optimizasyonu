@@ -8,10 +8,11 @@ import os
 import io
 import numpy as np
 
-os.environ.setdefault(
-    "PROJ_DATA",
-    r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
-)
+# Set PROJ_DATA cross-platform
+if "PROJ_DATA" not in os.environ:
+    local_proj_data = r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
+    if os.path.exists(local_proj_data):
+        os.environ["PROJ_DATA"] = local_proj_data
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import Response
@@ -22,11 +23,15 @@ from PIL import Image
 # APIRouter'ı tanımla (ana main.py'ye entegre etmek için)
 router = APIRouter()
 
-DATA_DIR = r"D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed"
+# Set DATA_DIR cross-platform
+DATA_DIR = os.getenv("DATA_DIR")
+if not DATA_DIR:
+    local_dir = r"D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed"
+    DATA_DIR = local_dir if os.path.exists(local_dir) else "/app/data"
 
 RASTERS = {
     "ges": os.path.join(DATA_DIR, "izmir_ges_uygunluk_v4.tif"),
-    "res": os.path.join(DATA_DIR, "izmir_res_uygunluk_v5.tif"),  # ← v4→v5 düzeltildi
+    "res": os.path.join(DATA_DIR, "izmir_res_uygunluk_v5.tif"),
 }
 
 # Renk paleti: sınıf 1-5 — alpha artırıldı (eskiden 120-160, şimdi 180-210)

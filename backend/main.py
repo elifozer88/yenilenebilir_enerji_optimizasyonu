@@ -1,8 +1,10 @@
 import os
-os.environ.setdefault(
-    "PROJ_DATA",
-    r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
-)
+
+# Set PROJ_DATA cross-platform
+if "PROJ_DATA" not in os.environ:
+    local_proj_data = r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
+    if os.path.exists(local_proj_data):
+        os.environ["PROJ_DATA"] = local_proj_data
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,8 +29,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000",
-                   "http://localhost:3001", "http://127.0.0.1:3001"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
