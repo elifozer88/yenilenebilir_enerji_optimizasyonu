@@ -7,8 +7,9 @@ import io
 import json
 import traceback
 from datetime import datetime
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from routers.auth import require_permission
 from database import get_pool
 
 router = APIRouter()
@@ -717,7 +718,7 @@ def build_pdf(data, map_png=None):
 
 
 # ── Endpoint ──────────────────────────────────────────────────
-@router.get("/rapor/pdf/{ilce_adi}")
+@router.get("/rapor/pdf/{ilce_adi}", dependencies=[Depends(require_permission("raporlar"))])
 async def pdf_rapor(
     ilce_adi: str,
     enerji:   str = Query(default="GES"),

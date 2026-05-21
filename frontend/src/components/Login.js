@@ -28,7 +28,8 @@ export default function Login({ onLogin }) {
       if (!res.ok) { setHata(data.detail || 'Giriş başarısız.'); return; }
       localStorage.setItem('yeatlas_token', data.token);
       localStorage.setItem('yeatlas_user', JSON.stringify(data.kullanici));
-      onLogin(data.token, data.kullanici);
+      localStorage.setItem('yeatlas_permissions', JSON.stringify(data.permissions));
+      onLogin(data.token, data.kullanici, data.permissions);
     } catch {
       setHata('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
     } finally {

@@ -2,7 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import MapView from './components/Map';
 import Santraller from './components/Santraller';
 import IlceKarsilastirma from './components/IlceKarsilastirma';
+import Login from './components/Login';
+import AdminPanel from './components/AdminPanel';
 import './Atlas.css';
+
+// Global fetch interceptor for Bearer token injection and 401 handling
+const originalFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  const token = localStorage.getItem('yeatlas_token');
+  if (token && (url.startsWith('/api') || url.startsWith('api') || url.includes('/api/'))) {
+    options.headers = options.headers || {};
+    if (!options.headers['Authorization']) {
+      options.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  const response = await originalFetch(url, options);
+  if (response.status === 401 && !url.includes('/api/auth/giris')) {
+    window.dispatchEvent(new CustomEvent('yeatlas_unauthorized'));
+  }
+  return response;
+};
 
 // ── SVG İllüstrasyonları ──────────────────────────────────────
 const GESIllustration = () => (
@@ -130,6 +149,24 @@ const TurbineIcon = ({ size = 26 }) => (
 );
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('yeatlas_token') || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem('yeatlas_user');
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [permissions, setPermissions] = useState(() => {
+    try {
+      const p = localStorage.getItem('yeatlas_permissions');
+      return p ? JSON.parse(p) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [page, setPage]           = useState('home');
   const [theme, setTheme]         = useState('dark');
   const [energyType, setEnergy]   = useState('GES');
@@ -155,11 +192,92 @@ export default function App() {
     ruzgar:30, arazi:27, yukseklik:13, yerlesim:10, enerji:6, egim:5, yol:4, fay:3, akarsu:2
   }), []);
 
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('yeatlas_token');
+    localStorage.removeItem('yeatlas_user');
+    localStorage.removeItem('yeatlas_permissions');
+    setToken(null);
+    setUser(null);
+    setPermissions(null);
+    setPage('home');
+  }, []);
+
+  const navigateTo = useCallback((targetPage) => {
+    if (targetPage === 'home') {
+      setPage('home');
+      return;
+    }
+    if (targetPage === 'admin') {
+      if (user?.rol === 'admin') {
+        setPage('admin');
+      } else {
+        setPage('home');
+      }
+      return;
+    }
+    if (permissions && permissions[targetPage]) {
+      setPage(targetPage);
+    } else {
+      setPage('home');
+    }
+  }, [permissions, user]);
+
+  const handleLogin = (t, u, p) => {
+    setToken(t);
+    setUser(u);
+    setPermissions(p);
+    setPage('home');
+  };
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      handleLogout();
+    };
+    window.addEventListener('yeatlas_unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('yeatlas_unauthorized', handleUnauthorized);
+    };
+  }, [handleLogout]);
+
+  useEffect(() => {
+    if (token) {
+      fetch('/api/auth/ben')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Unauthorized');
+        })
+        .then(data => {
+          setUser(data.kullanici);
+          setPermissions(data.permissions);
+          localStorage.setItem('yeatlas_user', JSON.stringify(data.kullanici));
+          localStorage.setItem('yeatlas_permissions', JSON.stringify(data.permissions));
+        })
+        .catch(() => {
+          handleLogout();
+        });
+    }
+  }, [token, handleLogout]);
+
+  useEffect(() => {
+    if (token && permissions) {
+      if (page === 'atlas' && !permissions.atlas) {
+        setPage('home');
+      } else if (page === 'raporlar' && !permissions.raporlar) {
+        setPage('home');
+      } else if (page === 'santraller' && !permissions.santraller) {
+        setPage('home');
+      } else if (page === 'admin' && user?.rol !== 'admin') {
+        setPage('home');
+      }
+    }
+  }, [permissions, page, token, user]);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {
+    if (!token) return;
     if(!selectedIlce){ setIlceDetay(null); setHavaDetay(null); return; }
     setIlceLoading(true);
     fetch(`/api/${energyType.toLowerCase()}/district/${encodeURIComponent(selectedIlce)}`)
@@ -171,9 +289,10 @@ export default function App() {
       .then(r=>r.ok?r.json():null)
       .then(d=>setHavaDetay(d))
       .catch(()=>setHavaDetay(null));
-  }, [selectedIlce, energyType]);
+  }, [selectedIlce, energyType, token]);
 
   useEffect(() => {
+    if (!token) return;
     const t = energyType.toLowerCase();
     fetch(`/api/${t}/districts?senaryo=${senaryo}`)
       .then(r=>r.ok?r.json():null)
@@ -187,22 +306,25 @@ export default function App() {
         const names = list.map(item=>item.ilce).sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
         setIlceler(names);
       }).catch(()=>{});
-  }, [energyType, senaryo]);
+  }, [energyType, senaryo, token]);
 
   useEffect(() => {
+    if (!token) return;
     ['ges','res'].forEach(t => {
       fetch(`/api/${t}/stats`)
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) setApiStats(prev => ({ ...prev, [t]: d })); })
         .catch(() => {});
     });
-  }, []);
+  }, [token]);
 
   const handleStatsUpdate = useCallback((s) => setStats(s), []);
 
   const goAtlas = (et) => {
-    if (et) setEnergy(et);
-    setPage('atlas');
+    if (permissions?.atlas) {
+      if (et) setEnergy(et);
+      setPage('atlas');
+    }
   };
 
   const gs = apiStats.ges;
@@ -241,6 +363,10 @@ export default function App() {
   const heroTextColor = theme === 'light' ? '#0f172a' : undefined;
   const heroSubColor  = theme === 'light' ? '#334155' : undefined;
 
+  if (!token) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="atlas-root">
       {/* ── TOPBAR ── */}
@@ -267,16 +393,44 @@ export default function App() {
           </div>
 
           <nav className="nav">
-            {[['home','Ana Sayfa'],['atlas','Atlas'],['raporlar','Raporlar'],['santraller','Santraller']].map(([id,label]) => (
-              <div key={id}
-                className={`nav-link${page===id?' active':''}`}
-                onClick={() => id==='atlas' ? setPage('atlas') : setPage(id)}>
-                {label}
-              </div>
-            ))}
+            {[
+              ['home', 'Ana Sayfa', true],
+              ['atlas', 'Atlas', permissions?.atlas],
+              ['raporlar', 'Raporlar', permissions?.raporlar],
+              ['santraller', 'Santraller', permissions?.santraller],
+              ['admin', 'Admin Paneli', user?.rol === 'admin']
+            ]
+              .filter(([_, __, allowed]) => allowed)
+              .map(([id, label]) => (
+                <div key={id}
+                  className={`nav-link${page===id?' active':''}`}
+                  onClick={() => navigateTo(id)}>
+                  {label}
+                </div>
+              ))}
           </nav>
 
           <div className="controls">
+            {user && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>
+                  {user.ad_soyad || user.kullanici_adi}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  background: user.rol === 'admin' ? '#F59E0B20' : user.rol === 'mudur' ? '#A78BFA20' : '#38BDF820',
+                  color: user.rol === 'admin' ? '#F59E0B' : user.rol === 'mudur' ? '#A78BFA' : '#38BDF8',
+                  border: `1px solid ${user.rol === 'admin' ? '#F59E0B' : user.rol === 'mudur' ? '#A78BFA' : '#38BDF8'}30`,
+                  textTransform: 'uppercase'
+                }}>
+                  {user.rol === 'admin' ? 'Admin' : user.rol === 'mudur' ? 'Müdür' : 'Analist'}
+                </span>
+              </div>
+            )}
+
             <div className="theme-pill">
               {['dark','light'].map(t => (
                 <button key={t} className={`theme-opt${theme===t?' active':''}`} onClick={() => setTheme(t)}>
@@ -287,8 +441,36 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button className="cta-btn" onClick={() => setPage('atlas')}>
-              <MapIcon/> Atlası Aç
+
+            {permissions?.atlas && (
+              <button className="cta-btn" onClick={() => navigateTo('atlas')}>
+                <MapIcon/> Atlası Aç
+              </button>
+            )}
+
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 9,
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#EF4444',
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                marginLeft: 4,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+              }}
+            >
+              Çıkış Yap
             </button>
           </div>
         </div>
@@ -335,9 +517,11 @@ export default function App() {
                   GES ve RES uygunluk analizleri; AHP çok kriterli karar destek ve PostGIS tabanlı mekânsal veri tabanı üzerinden tüm ilçeler için sunulmaktadır.
                 </p>
                 <div className="hero-actions" style={{marginBottom:36}}>
-                  <button className="btn-primary" onClick={() => setPage('atlas')} style={{padding:'12px 24px',fontSize:14}}>
-                    Atlası İncele <ArrowIcon/>
-                  </button>
+                  {permissions?.atlas && (
+                    <button className="btn-primary" onClick={() => navigateTo('atlas')} style={{padding:'12px 24px',fontSize:14}}>
+                      Atlası İncele <ArrowIcon/>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -409,7 +593,9 @@ export default function App() {
                 <h2 className="section-title">Yenilenebilir kaynaklara göre uygunluk</h2>
                 <p className="section-desc">AHP tabanlı çok kriterli mekânsal karar destek modeli; QGIS ve PostGIS altyapısı ile üretilmiş skorlar.</p>
               </div>
-              <span className="section-link" onClick={() => setPage('atlas')}>Tüm atlasa git →</span>
+              {permissions?.atlas && (
+                <span className="section-link" onClick={() => navigateTo('atlas')}>Tüm atlasa git →</span>
+              )}
             </div>
             <div className="cats">
               <div className="cat" style={{'--cat-color':'var(--solar)'}} onClick={() => goAtlas('GES')}>
@@ -522,10 +708,16 @@ export default function App() {
               {/* ── FİX 4: Footer — tüm linkler navigasyon ile ── */}
               <div className="footer-col">
                 <h4>Analizler</h4>
-                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('GES')}>GES Analizi</span>
-                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('RES')}>RES Analizi</span>
-                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => setPage('atlas')}>Birleşik Atlas</span>
-                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => setPage('raporlar')}>İlçe Karşılaştırma</span>
+                {permissions?.atlas && (
+                  <>
+                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('GES')}>GES Analizi</span>
+                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('RES')}>RES Analizi</span>
+                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => navigateTo('atlas')}>Birleşik Atlas</span>
+                  </>
+                )}
+                {permissions?.raporlar && (
+                  <span className="footer-link" style={{cursor:'pointer'}} onClick={() => navigateTo('raporlar')}>İlçe Karşılaştırma</span>
+                )}
               </div>
               <div className="footer-col">
                 <h4>Teknik</h4>
@@ -843,15 +1035,17 @@ export default function App() {
                         </div>
                       ))}
                     </div>
-                    <button onClick={()=>setPage('raporlar')} style={{
-                      padding:'9px',borderRadius:8,border:'1px solid rgba(14,165,164,0.3)',
-                      background:'var(--brand-soft)',color:'var(--brand)',
-                      fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',
-                      display:'flex',alignItems:'center',justifyContent:'center',gap:6,
-                    }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg>
-                      Detaylı Raporu Aç
-                    </button>
+                    {permissions?.raporlar && (
+                      <button onClick={()=>navigateTo('raporlar')} style={{
+                        padding:'9px',borderRadius:8,border:'1px solid rgba(14,165,164,0.3)',
+                        background:'var(--brand-soft)',color:'var(--brand)',
+                        fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',
+                        display:'flex',alignItems:'center',justifyContent:'center',gap:6,
+                      }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg>
+                        Detaylı Raporu Aç
+                      </button>
+                    )}
                   </div>
                 );
               })()}
@@ -982,6 +1176,15 @@ export default function App() {
 
       {page === 'santraller' && (
         <Santraller/>
+      )}
+
+      {/* ── ADMIN PANEL ── */}
+      {page === 'admin' && user?.rol === 'admin' && (
+        <AdminPanel
+          token={token}
+          user={user}
+          onBack={() => navigateTo('home')}
+        />
       )}
     </div>
   );

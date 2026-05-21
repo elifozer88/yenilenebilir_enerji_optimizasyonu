@@ -13,8 +13,9 @@ from rasterio.warp import transform
 import numpy as np
 from fastapi.concurrency import run_in_threadpool
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from fastapi.responses import Response
+from routers.auth import require_permission
 from database import get_pool
 from cache import district_cache, polygon_cache, stats_cache, detail_cache, cache_key
 
@@ -71,7 +72,7 @@ def _json(data, cache_sec=120):
 
 
 # ── /api/ges/districts ──────────────────────────────────────
-@router.get("/ges/districts")
+@router.get("/ges/districts", dependencies=[Depends(require_permission("atlas"))])
 async def get_ges_districts(senaryo: str = Query(default="varsayilan")):
     key = cache_key("ges_districts", senaryo)
     cached = await district_cache.get(key)
@@ -135,7 +136,7 @@ async def get_ges_districts(senaryo: str = Query(default="varsayilan")):
 
 
 # ── /api/ges/polygons ───────────────────────────────────────
-@router.get("/ges/polygons")
+@router.get("/ges/polygons", dependencies=[Depends(require_permission("atlas"))])
 async def get_ges_polygons(
     min_sinif: int = Query(default=4, ge=1, le=5),
     senaryo:   str = Query(default="varsayilan"),
@@ -248,7 +249,7 @@ async def get_ges_polygons(
 
 
 # ── /api/ges/stats ──────────────────────────────────────────
-@router.get("/ges/stats")
+@router.get("/ges/stats", dependencies=[Depends(require_permission("atlas"))])
 async def get_ges_stats(senaryo: str = Query(default="varsayilan")):
     key = cache_key("ges_stats", senaryo)
     cached = await stats_cache.get(key)
@@ -296,7 +297,7 @@ async def get_ges_stats(senaryo: str = Query(default="varsayilan")):
 
 
 # ── /api/ges/district/{ilce_adi} ────────────────────────────
-@router.get("/ges/district/{ilce_adi}")
+@router.get("/ges/district/{ilce_adi}", dependencies=[Depends(require_permission("raporlar"))])
 async def get_ges_district(ilce_adi: str, senaryo: str = Query(default="varsayilan")):
     key = cache_key("ges_district", ilce_adi.lower(), senaryo)
     cached = await detail_cache.get(key)
@@ -368,7 +369,7 @@ async def get_ges_district(ilce_adi: str, senaryo: str = Query(default="varsayil
 
 
 # ── /api/ges/district/{ilce_adi}/extremes ───────────────────
-@router.get("/ges/district/{ilce_adi}/extremes")
+@router.get("/ges/district/{ilce_adi}/extremes", dependencies=[Depends(require_permission("raporlar"))])
 async def get_ges_district_extremes(ilce_adi: str, senaryo: str = Query(default="varsayilan")):
     key = cache_key("ges_extremes", ilce_adi.lower(), senaryo)
     cached = await detail_cache.get(key)
@@ -518,7 +519,7 @@ async def get_ges_district_extremes(ilce_adi: str, senaryo: str = Query(default=
 
 
 # ── /api/ges/scenarios ──────────────────────────────────────
-@router.get("/ges/scenarios")
+@router.get("/ges/scenarios", dependencies=[Depends(require_permission("atlas"))])
 async def get_ges_scenarios():
     key = "ges_scenarios"
     cached = await stats_cache.get(key)

@@ -2,13 +2,14 @@
 backend/routers/mahalle.py - Yerel DB'den mahalle verisi
 """
 import json
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from database import get_pool
+from routers.auth import require_permission
 
 router = APIRouter()
 _mahalle_cache: dict = {}
 
-@router.get("/mahalle/{ilce_adi}")
+@router.get("/mahalle/{ilce_adi}", dependencies=[Depends(require_permission("raporlar"))])
 async def get_mahalleler(ilce_adi: str, enerji: str = Query(default="GES")):
     cache_key = f"{ilce_adi.lower()}_{enerji}"
     if cache_key in _mahalle_cache:

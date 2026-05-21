@@ -3,8 +3,9 @@ backend/routers/santral.py
 Mevcut GES/RES santralleri — OSM Overpass API (canlı veri)
 """
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 import time
+from routers.auth import require_permission
 
 router = APIRouter()
 
@@ -144,7 +145,7 @@ def _to_feature(s, ilce, enerji):
     }
 
 
-@router.get("/santral/list")
+@router.get("/santral/list", dependencies=[Depends(require_permission("santraller"))])
 async def get_santraller(enerji: str = Query(default="GES")):
     kaynak = "solar" if enerji == "GES" else "wind"
     santraller = await fetch_osm_santraller(kaynak)
@@ -164,7 +165,7 @@ async def get_santraller(enerji: str = Query(default="GES")):
     }
 
 
-@router.get("/santral/izmir-ozet")
+@router.get("/santral/izmir-ozet", dependencies=[Depends(require_permission("santraller"))])
 async def get_izmir_ozet():
     ges = await fetch_osm_santraller("solar")
     res = await fetch_osm_santraller("wind")
@@ -175,7 +176,7 @@ async def get_izmir_ozet():
     }
 
 
-@router.get("/santral/ilce/{ilce_adi}")
+@router.get("/santral/ilce/{ilce_adi}", dependencies=[Depends(require_permission("santraller"))])
 async def get_ilce_santraller(ilce_adi: str, enerji: str = Query(default="GES")):
     """İlçeye özgü santraller — GeoJSON FeatureCollection döner."""
     kaynak = "solar" if enerji == "GES" else "wind"

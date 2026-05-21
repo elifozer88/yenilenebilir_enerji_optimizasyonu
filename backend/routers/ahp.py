@@ -239,6 +239,7 @@ async def hesapla(enerji_tipi: str, user=Depends(get_current_user)):
     return {"mesaj": f"{enerji_tipi} skorları yeniden hesaplandı", "guncellenen_ilce": n}
 
 
+@router.post("/ahp/sifirla")
 async def sifirla(
     enerji_tipi: str,
     user=Depends(get_current_user)

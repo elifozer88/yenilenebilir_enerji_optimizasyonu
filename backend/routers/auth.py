@@ -88,12 +88,66 @@ require_admin    = _rol_kontrol(["admin"])
 
 
 # -------------------------------------------------------------------
+# Sayfa / İzin Yardımcıları
+# -------------------------------------------------------------------
+
+async def get_role_permissions(role: str) -> dict:
+    if role == "admin":
+        return {"atlas": True, "raporlar": True, "santraller": True}
+    
+    async with get_pool().acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT page, is_allowed 
+            FROM enerji.role_permissions 
+            WHERE role = $1
+        """, role)
+    
+    perms = {"atlas": True, "raporlar": True, "santraller": True}
+    for r in rows:
+        perms[r["page"]] = r["is_allowed"]
+    return perms
+
+
+async def check_permission(user: dict, page: str) -> bool:
+    if user.get("rol") == "admin":
+        return True
+    
+    async with get_pool().acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT is_allowed 
+            FROM enerji.role_permissions 
+            WHERE role = $1 AND page = $2
+        """, user.get("rol"), page)
+    
+    if row is None:
+        return True
+    return row["is_allowed"]
+
+
+def require_permission(page: str):
+    async def dependency(user: dict = Depends(get_current_user)) -> dict:
+        allowed = await check_permission(user, page)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Bu sayfa veya özelliğe erişim izniniz bulunmamaktadır."
+            )
+        return user
+    return dependency
+
+
+# -------------------------------------------------------------------
 # Modeller
 # -------------------------------------------------------------------
 
 class GirisIstegi(BaseModel):
     kullanici_adi: str
     sifre: str
+
+
+class PermissionUpdate(BaseModel):
+    role: str
+    permissions: dict
 
 
 # -------------------------------------------------------------------
@@ -131,6 +185,8 @@ async def giris(istek: GirisIstegi):
         "id":    kullanici["id"],
     })
 
+    perms = await get_role_permissions(kullanici["rol"])
+
     return {
         "token": token,
         "kullanici": {
@@ -139,13 +195,69 @@ async def giris(istek: GirisIstegi):
             "ad_soyad":      kullanici["ad_soyad"],
             "rol":           kullanici["rol"],
             "birim":         kullanici["birim"],
-        }
+        },
+        "permissions": perms
     }
 
 
 @router.get("/auth/ben")
 async def ben(user: dict = Depends(get_current_user)):
-    return user
+    perms = await get_role_permissions(user.get("rol"))
+    return {
+        "kullanici": {
+            "id":            user.get("id"),
+            "kullanici_adi": user.get("sub"),
+            "ad_soyad":      user.get("ad"),
+            "rol":           user.get("rol"),
+            "birim":         user.get("birim"),
+        },
+        "permissions": perms
+    }
+
+
+@router.get("/auth/permissions")
+async def list_permissions(user: dict = Depends(require_admin)):
+    """List all role permissions (for admin use)"""
+    async with get_pool().acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT role, page, is_allowed 
+            FROM enerji.role_permissions
+            ORDER BY role, page
+        """)
+        
+    res = {}
+    for r in rows:
+        role = r["role"]
+        page = r["page"]
+        val = r["is_allowed"]
+        if role not in res:
+            res[role] = {}
+        res[role][page] = val
+        
+    # ensure mudur and analist exist in the response
+    for r_name in ["mudur", "analist"]:
+        if r_name not in res:
+            res[r_name] = {"atlas": True, "raporlar": True, "santraller": True}
+            
+    return [{"role": k, "permissions": v} for k, v in res.items()]
+
+
+@router.post("/auth/permissions")
+async def update_permissions(istek: PermissionUpdate, user: dict = Depends(require_admin)):
+    """Update permissions for a specific role (for admin use)"""
+    if istek.role == "admin":
+        raise HTTPException(status_code=400, detail="Admin yetkileri değiştirilemez")
+        
+    async with get_pool().acquire() as conn:
+        for page, is_allowed in istek.permissions.items():
+            await conn.execute("""
+                INSERT INTO enerji.role_permissions (role, page, is_allowed)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (role, page) 
+                DO UPDATE SET is_allowed = EXCLUDED.is_allowed
+            """, istek.role, page, is_allowed)
+            
+    return {"mesaj": f"{istek.role} rolü yetkileri güncellendi"}
 
 
 @router.post("/auth/cikis")
