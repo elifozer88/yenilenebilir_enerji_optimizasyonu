@@ -1,9 +1,16 @@
+import os
+os.environ.setdefault(
+    "PROJ_DATA",
+    r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
+)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database import init_pool, close_pool
 from routers import ges, res, terrain, ml, mahalle, pdf_rapor, hava, santral, auth, ahp
+import tile_server
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,7 +44,8 @@ app.include_router(hava.router,      prefix="/api")
 app.include_router(santral.router,   prefix="/api")
 app.include_router(auth.router,      prefix="/api")
 app.include_router(ahp.router,       prefix="/api")
+app.include_router(tile_server.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "2.0.0"}

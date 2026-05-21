@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import MapView from './components/Map';
 import Santraller from './components/Santraller';
 import IlceKarsilastirma from './components/IlceKarsilastirma';
-import InlineIlcePanel from './components/InlineIlcePanel';
 import './Atlas.css';
 
 // ── SVG İllüstrasyonları ──────────────────────────────────────
@@ -135,17 +134,19 @@ export default function App() {
   const [theme, setTheme]         = useState('dark');
   const [energyType, setEnergy]   = useState('GES');
   const minScore = 1;
+  // eslint-disable-next-line no-unused-vars
   const [stats, setStats]         = useState({ count:0, avgScore:'—', maxScore:'—', totalHa:0, totalMw:0 });
   const [apiStats, setApiStats]   = useState({ ges:null, res:null });
   const [cityFocus, setCityFocus] = useState(false);
-  const [show3D, setShow3D]       = useState(true);
+  const [show3D]                  = useState(true);
   const [flyToIlce, setFlyToIlce] = useState(null);
   const [selectedIlce, setSelectedIlce] = useState('');
-  const [senaryo, setSenaryo]         = useState('varsayilan');
+  const [senaryo]                 = useState('varsayilan');
   const [ilceDetay, setIlceDetay]     = useState(null);
   const [ilceLoading, setIlceLoading] = useState(false);
   const [ilceler, setIlceler]     = useState([]);
   const [havaDetay, setHavaDetay] = useState(null);
+  const [rankedDistricts, setRankedDistricts] = useState([]);
 
   const WEIGHTS_GES = useMemo(() => ({
     solar:32, arazi:25, egim:11, baki:9, enerji:8, yerlesim:7, yol:4, fay:3, akarsu:1
@@ -173,14 +174,20 @@ export default function App() {
   }, [selectedIlce, energyType]);
 
   useEffect(() => {
-    fetch('/api/ges/districts')
+    const t = energyType.toLowerCase();
+    fetch(`/api/${t}/districts?senaryo=${senaryo}`)
       .then(r=>r.ok?r.json():null)
       .then(gj=>{
-        if(!gj) return;
-        const names = gj.features.map(f=>f.properties.ilce).filter(Boolean).sort();
+        if(!gj?.features) return;
+        const list = gj.features.map(f=>({
+          ilce: f.properties.ilce,
+          skor: f.properties.skor_ort || 0
+        })).sort((a,b)=>b.skor-a.skor);
+        setRankedDistricts(list);
+        const names = list.map(item=>item.ilce).sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
         setIlceler(names);
       }).catch(()=>{});
-  }, []);
+  }, [energyType, senaryo]);
 
   useEffect(() => {
     ['ges','res'].forEach(t => {
@@ -921,44 +928,45 @@ export default function App() {
                 </div>
               )}
 
-              <div className="sidebar-section">
-                <div className="sidebar-label">İlçe Sıralaması</div>
-                {(energyType==='GES'
-                  ? [['Çiğli',3.18],['Torbalı',3.11],['Selçuk',3.07],['Çeşme',3.06],['Seferihisar',3.03],['Menemen',2.99],['Tire',2.97]]
-                  : [['Çeşme',3.81],['Karaburun',3.66],['Aliağa',3.57],['Dikili',3.45],['Foça',3.32],['Bergama',3.21],['Seferihisar',3.10]]
-                ).map(([ilce, skor], i) => {
-                  const renk = skor >= 3.5 ? '#14803C' : skor >= 3 ? '#4AA635' : '#D97706';
-                  const isSelected = selectedIlce === ilce;
-                  return (
-                    <div key={ilce}
-                      style={{
-                        display:'flex',alignItems:'center',gap:10,
-                        padding:'6px 8px',borderRadius:8,
-                        borderBottom:'1px solid rgba(255,255,255,0.04)',
-                        cursor:'pointer',
-                        background:isSelected?'var(--brand-soft)':'transparent',
-                        transition:'background 0.15s',
-                      }}
-                      onClick={()=>{
-                        setSelectedIlce(ilce);
-                        setFlyToIlce(null);
-                        setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80);
-                      }}>
-                      <span style={{fontSize:10,fontWeight:700,color:'var(--muted)',width:16,textAlign:'right'}}>
-                        {String(i+1).padStart(2,'0')}
-                      </span>
-                      <div style={{flex:1}}>
-                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                          <span style={{fontSize:12.5,fontWeight:600,color:isSelected?'var(--brand)':'var(--text)'}}>{ilce}</span>
-                          <span style={{fontSize:12,fontWeight:800,color:renk}}>{skor.toFixed(1)}</span>
-                        </div>
-                        <div style={{height:3,borderRadius:2,background:'rgba(255,255,255,0.05)',overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${(skor/5)*100}%`,background:renk,borderRadius:2}}/>
+              <div className="sidebar-section" style={{ display:'flex', flexDirection:'column', flex:1, minHeight: 0 }}>
+                <div className="sidebar-label" style={{ marginBottom: 8 }}>İlçe Sıralaması ({rankedDistricts.length})</div>
+                <div className="scroll-styled" style={{ overflowY: 'auto', maxHeight: '420px', paddingRight: '4px' }}>
+                  {rankedDistricts.map((item, i) => {
+                    const ilce = item.ilce;
+                    const skor = item.skor;
+                    const renk = skor >= 4.0 ? '#16a34a' : skor >= 3.0 ? '#84cc16' : skor >= 2.0 ? '#f59e0b' : '#ef4444';
+                    const isSelected = selectedIlce === ilce;
+                    return (
+                      <div key={ilce}
+                        style={{
+                          display:'flex',alignItems:'center',gap:10,
+                          padding:'6px 8px',borderRadius:8,
+                          borderBottom:'1px solid rgba(255,255,255,0.04)',
+                          cursor:'pointer',
+                          background:isSelected?'var(--brand-soft)':'transparent',
+                          transition:'background 0.15s',
+                        }}
+                        onClick={()=>{
+                          setSelectedIlce(ilce);
+                          setFlyToIlce(null);
+                          setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80);
+                        }}>
+                        <span style={{fontSize:10,fontWeight:700,color:'var(--muted)',width:16,textAlign:'right'}}>
+                          {String(i+1).padStart(2,'0')}
+                        </span>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                            <span style={{fontSize:12.5,fontWeight:600,color:isSelected?'var(--brand)':'var(--text)'}}>{ilce}</span>
+                            <span style={{fontSize:12,fontWeight:800,color:renk}}>{skor.toFixed(2)}</span>
+                          </div>
+                          <div style={{height:3,borderRadius:2,background:'rgba(255,255,255,0.05)',overflow:'hidden'}}>
+                            <div style={{height:'100%',width:`${(skor/5)*100}%`,background:renk,borderRadius:2}}/>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </aside>
           </div>

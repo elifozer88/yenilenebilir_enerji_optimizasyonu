@@ -2,6 +2,17 @@
 backend/routers/res.py — RES endpoints
 """
 import json
+import os
+
+# Set PROJ environment variables BEFORE importing rasterio/pyproj
+os.environ["PROJ_DATA"] = r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
+os.environ["PROJ_LIB"] = r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
+
+import rasterio
+from rasterio.warp import transform
+import numpy as np
+from fastapi.concurrency import run_in_threadpool
+
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import Response
 from database import get_pool
@@ -11,6 +22,45 @@ router = APIRouter()
 
 TOL_DISTRICT = 0.002
 TOL_POLYGON  = 0.0003
+
+DATA_DIR = r"D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed"
+
+KRITER_RASTER = {
+    "solar":     (os.path.join(DATA_DIR, "izmir_solar_rc.tif"),           None),
+    "ruzgar":    (None,                                                    os.path.join(DATA_DIR, "izmir_ruzgar_rc_final.tif")),
+    "egim":      (os.path.join(DATA_DIR, "izmir_egim_ges_rc.tif"),        os.path.join(DATA_DIR, "izmir_egim_res_rc.tif")),
+    "baki":      (os.path.join(DATA_DIR, "izmir_baki_rc.tif"),            None),
+    "yukseklik": (None,                                                    os.path.join(DATA_DIR, "izmir_yukseklik_rc.tif")),
+    "arazi":     (os.path.join(DATA_DIR, "izmir_arazi_ges_rc_v3.tif"),    os.path.join(DATA_DIR, "izmir_arazi_final4.tif")),
+    "yerlesim":  (os.path.join(DATA_DIR, "izmir_yerlesim_ges_rc.tif"),    os.path.join(DATA_DIR, "izmir_yerlesim_res_rc.tif")),
+    "yol":       (os.path.join(DATA_DIR, "izmir_yol_rc.tif"),             os.path.join(DATA_DIR, "izmir_yol_rc.tif")),
+    "akarsu":    (os.path.join(DATA_DIR, "izmir_akarsu_ges_rc.tif"),      os.path.join(DATA_DIR, "izmir_akarsu_res_rc.tif")),
+    "enerji":    (os.path.join(DATA_DIR, "izmir_enerji_ges_rc.tif"),      os.path.join(DATA_DIR, "izmir_enerji_res_rc.tif")),
+    "fay":       (os.path.join(DATA_DIR, "izmir_fay_ges_rc.tif"),         os.path.join(DATA_DIR, "izmir_fay_res_rc.tif")),
+}
+
+def get_pixel_kriter_scores(lon: float, lat: float, energy_type: str) -> dict:
+    """
+    Given (lon, lat) in EPSG:4326, samples the criterion scores (1-5) from the respective rasters.
+    Returns a dictionary of {kriter_kod: score}.
+    """
+    scores = {}
+    for kod, (ges_path, res_path) in KRITER_RASTER.items():
+        tif_path = ges_path if energy_type == "GES" else res_path
+        if not tif_path or not os.path.exists(tif_path):
+            continue
+        try:
+            with rasterio.open(tif_path) as src:
+                xs, ys = transform("epsg:4326", src.crs, [lon], [lat])
+                val = next(src.sample([(xs[0], ys[0])]))[0]
+                nd = src.nodata if src.nodata is not None else -9999
+                if val == nd or np.isnan(val):
+                    scores[kod] = None
+                else:
+                    scores[kod] = round(float(val), 2)
+        except Exception:
+            scores[kod] = None
+    return scores
 
 def _json(data, cache_sec=120):
     return Response(
@@ -89,7 +139,7 @@ async def get_res_districts(senaryo: str = Query(default="varsayilan")):
 async def get_res_polygons(
     min_sinif: int = Query(default=4, ge=1, le=5),
     senaryo:   str = Query(default="varsayilan"),
-    limit:     int = Query(default=1500, ge=100, le=10000),  # varsayılan 1500'e çıktı
+    limit:     int = Query(default=1500, ge=100, le=10000),
     ilce:      str = Query(default=None),
 ):
     key = cache_key("res_polygons", min_sinif, senaryo, limit, ilce or "")
@@ -99,8 +149,6 @@ async def get_res_polygons(
                         headers={"Cache-Control": "public,max-age=300", "X-Cache": "HIT"})
 
     if ilce:
-        # İlçe bazlı sorgu: ST_Intersection ile kesin clip,
-        # ST_IsEmpty ve ST_IsValid kontrolleri eklenmiş → geçersiz geom dönmez
         query = """
             WITH filtered_bolgeler AS (
                 SELECT
@@ -132,15 +180,10 @@ async def get_res_polygons(
                 LIMIT $3
             )
             SELECT
-                id,
-                sinif,
-                alan_ha,
-                tahmini_mw,
-                $5 AS ilce,
+                id, sinif, alan_ha, tahmini_mw, $5 AS ilce,
                 ST_AsGeoJSON(
                     ST_SimplifyPreserveTopology(
-                        ST_Intersection(geom, ilce_geom_4326),
-                        $4
+                        ST_Intersection(geom, ilce_geom_4326), $4
                     )
                 ) AS geom
             FROM filtered_bolgeler
@@ -192,7 +235,7 @@ async def get_res_polygons(
             },
         }
         for r in rows
-        if r["geom"] and r["geom"] != 'null'   # ← boş/null geom güvenliği
+        if r["geom"] and r["geom"] != 'null'
     ]
     result = json.dumps(
         {"type": "FeatureCollection", "features": features,
@@ -218,6 +261,7 @@ async def get_res_stats(senaryo: str = Query(default="varsayilan")):
             COUNT(DISTINCT u.ilce_id)          AS ilce_sayisi,
             ROUND(AVG(u.skor_ort)::numeric, 2) AS ort_skor,
             ROUND(MAX(u.skor_max)::numeric, 2) AS max_skor,
+            ROUND(MIN(u.skor_min)::numeric, 2) AS min_skor,
             SUM(u.uygun_alan_ha)               AS toplam_uygun_ha,
             SUM(u.tahmini_mw)                  AS toplam_mw,
             SUM(u.sinif5_ha)                   AS sinif5_ha,
@@ -234,9 +278,13 @@ async def get_res_stats(senaryo: str = Query(default="varsayilan")):
         raise HTTPException(status_code=500, detail=str(e))
 
     data = {
-        "ilce_sayisi":     int(row["ilce_sayisi"]),
+        "ilce_sayisi":     int(row["ilce_sayisi"]) if row["ilce_sayisi"] else 0,
         "ort_skor":        float(row["ort_skor"]) if row["ort_skor"] else 0,
         "max_skor":        float(row["max_skor"]) if row["max_skor"] else 0,
+        "min_skor":        float(row["min_skor"]) if row["min_skor"] else 0,
+        "min":             float(row["min_skor"]) if row["min_skor"] else 0,
+        "max":             float(row["max_skor"]) if row["max_skor"] else 0,
+        "mean":            float(row["ort_skor"]) if row["ort_skor"] else 0,
         "toplam_uygun_ha": float(row["toplam_uygun_ha"]) if row["toplam_uygun_ha"] else 0,
         "toplam_mw":       float(row["toplam_mw"]) if row["toplam_mw"] else 0,
         "sinif5_ha":       float(row["sinif5_ha"]) if row["sinif5_ha"] else 0,
@@ -327,7 +375,7 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
     if cached:
         return Response(content=json.dumps(cached, ensure_ascii=False),
                         media_type="application/json",
-                        headers={"Cache-Control": "public,max-age=600", "X-Cache": "HIT"})
+                        headers={"Cache-Control": "no-store, no-cache, must-revalidate", "X-Cache": "HIT"})
 
     sinif_q = """
         SELECT u.sinif1_ha, u.sinif2_ha, u.sinif3_ha, u.sinif4_ha, u.sinif5_ha
@@ -337,7 +385,6 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
         JOIN enerji.senaryo     s  ON s.id  = u.senaryo_id
         WHERE et.kod = 'RES' AND s.kod = $1 AND i.ilce_adi = $2
     """
-
     bolge_max_q = """
         SELECT
             ST_X(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lon,
@@ -358,7 +405,6 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
         ORDER BY ub.uygunluk_sinif DESC, ub.alan_ha DESC
         LIMIT 1
     """
-
     bolge_min_q = """
         SELECT
             ST_X(ST_Transform(ST_PointOnSurface(ub.geom), 4326)) AS lon,
@@ -379,6 +425,16 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
         ORDER BY ub.uygunluk_sinif ASC, ub.alan_ha ASC
         LIMIT 1
     """
+    # ── YENİ: İlçe kriter profili ──────────────────────────
+    kriter_q = """
+        SELECT k.kod, k.ad, iks.rc_ort AS skor
+        FROM enerji.ilce_kriter_istatistik iks
+        JOIN enerji.kriterler   k  ON k.id  = iks.kriter_id
+        JOIN enerji.enerji_tipi et ON et.id = iks.enerji_tipi_id
+        JOIN enerji.ilceler     i  ON i.id  = iks.ilce_id
+        WHERE et.kod = 'RES' AND i.ilce_adi = $1
+        ORDER BY iks.rc_ort DESC NULLS LAST
+    """
 
     try:
         async with get_pool().acquire() as conn:
@@ -387,12 +443,13 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
                 raise HTTPException(status_code=404, detail=f"{ilce_adi} bulunamadı")
 
             siniflar = {k: float(u[f"sinif{k}_ha"] or 0) for k in range(1, 6)}
-            dolu = {k: v for k, v in siniflar.items() if v > 0}
+            dolu     = {k: v for k, v in siniflar.items() if v > 0}
             true_max = max(dolu.keys()) if dolu else 4
             true_min = min(dolu.keys()) if dolu else 4
 
-            r_max = await conn.fetchrow(bolge_max_q, senaryo, ilce_adi)
-            r_min = await conn.fetchrow(bolge_min_q, senaryo, ilce_adi)
+            r_max     = await conn.fetchrow(bolge_max_q, senaryo, ilce_adi)
+            r_min     = await conn.fetchrow(bolge_min_q, senaryo, ilce_adi)
+            kriterler = await conn.fetch(kriter_q, ilce_adi)   # ← YENİ
 
     except HTTPException:
         raise
@@ -400,7 +457,12 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
         raise HTTPException(status_code=500, detail=str(e))
 
     if not r_max or not r_min:
-        raise HTTPException(status_code=404, detail=f"{ilce_adi} için bölge koordinatı alınamadı")
+        raise HTTPException(status_code=404,
+                            detail=f"{ilce_adi} için bölge koordinatı alınamadı")
+
+    # Sample pixel criteria scores
+    max_scores = await run_in_threadpool(get_pixel_kriter_scores, float(r_max["lon"]), float(r_max["lat"]), "RES")
+    min_scores = await run_in_threadpool(get_pixel_kriter_scores, float(r_min["lon"]), float(r_min["lat"]), "RES")
 
     same_coords = (
         abs(float(r_max["lon"]) - float(r_min["lon"])) < 0.0001 and
@@ -408,9 +470,34 @@ async def get_res_district_extremes(ilce_adi: str, senaryo: str = Query(default=
     )
 
     result = {
-        "ilce": ilce_adi,
+        "ilce":           ilce_adi,
         "true_max_sinif": true_max,
         "true_min_sinif": true_min,
+        # ── YENİ: KriterAciklama'ya beslenecek veri ────────
+        "kriterler": [
+            {
+                "kod":  r["kod"],
+                "ad":   r["ad"],
+                "skor": round(float(r["skor"]), 2) if r["skor"] else 0,
+            }
+            for r in kriterler
+        ],
+        "max_kriterler": [
+            {
+                "kod":  r["kod"],
+                "ad":   r["ad"],
+                "skor": max_scores.get(r["kod"]) if max_scores.get(r["kod"]) is not None else 0,
+            }
+            for r in kriterler
+        ],
+        "min_kriterler": [
+            {
+                "kod":  r["kod"],
+                "ad":   r["ad"],
+                "skor": min_scores.get(r["kod"]) if min_scores.get(r["kod"]) is not None else 0,
+            }
+            for r in kriterler
+        ],
         "max": {
             "lon":     float(r_max["lon"]),
             "lat":     float(r_max["lat"]),

@@ -5,7 +5,6 @@ import { BitmapLayer, GeoJsonLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { buildTooltip } from './MapTooltip';
 
-const TILE_SERVER  = 'http://127.0.0.1:8001';
 const MAPTILER_KEY = 'PzlgBC84G0BsOFlAoA71';
 const INITIAL_VIEW = { longitude:27.05, latitude:38.42, zoom:9.2, pitch:52, bearing:-15 };
 const CITY_VIEW    = { longitude:27.05, latitude:38.42, zoom:11, pitch:30, bearing:0 };
@@ -112,13 +111,16 @@ export default function MapView({
         if(pendingFly.current){ doFlyTo(pendingFly.current,gj); pendingFly.current=null; }
       }).catch(()=>{});
 
-    const p2=fetch(`/api/${t}/polygons?min_sinif=4&senaryo=${senaryo}&limit=1500`,{signal:ctrl.signal})
-      .then(r=>r.ok?r.json():null)
-      .then(gj=>{ if(gj) setPolyData(gj); }).catch(()=>{});
+    let p2 = Promise.resolve(null);
+    if (selectedIlce) {
+      p2 = fetch(`/api/${t}/polygons?min_sinif=${minScore}&senaryo=${senaryo}&limit=3000&ilce=${encodeURIComponent(selectedIlce)}`,{signal:ctrl.signal})
+        .then(r=>r.ok?r.json():null)
+        .then(gj=>{ if(gj) setPolyData(gj); }).catch(()=>{});
+    }
 
     Promise.allSettled([p1,p2]).finally(()=>setLoading(false));
     return()=>ctrl.abort();
-  },[energyType,senaryo,doFlyTo]);
+  },[energyType,senaryo,minScore,selectedIlce,doFlyTo,onStatsUpdate]);
 
   const zoom = viewState.zoom;
 
@@ -146,17 +148,26 @@ export default function MapView({
         }),
       ]:[]),
 
-      ...(showSuitability?[
+      // 3. Raster suitability tiles — colors the entire map instantly
+      ...(showSuitability ? [
         new TileLayer({
-          id:`raster-${energyType}`,
-          data:`${TILE_SERVER}/tiles/${t}/{z}/{x}/{y}.png`,
-          minZoom:6, maxZoom:14, tileSize:256, opacity:0.55,
-          renderSubLayers:p=>{
-            const {west,south,east,north}=p.tile.bbox;
-            return new BitmapLayer(p,{data:null,image:p.data,bounds:[west,south,east,north],parameters:{depthTest:false}});
+          id: `suitability-tiles-${t}-${minScore}-${senaryo}`,
+          data: `/api/tiles/${t}/{z}/{x}/{y}.png?min_score=${minScore}&senaryo=${senaryo}`,
+          minZoom: 0,
+          maxZoom: 14,
+          tileSize: 256,
+          opacity: 0.85,
+          renderSubLayers: p => {
+            const { west, south, east, north } = p.tile.bbox;
+            return new BitmapLayer(p, {
+              data: null,
+              image: p.data,
+              bounds: [west, south, east, north],
+              parameters: { depthTest: false }
+            });
           },
-        }),
-      ]:[]),
+        })
+      ] : []),
 
       ...(showSuitability&&polyData?[
         new GeoJsonLayer({
@@ -170,17 +181,6 @@ export default function MapView({
           lineWidthMinPixels:0.6,
           parameters:{depthTest:false},
           updateTriggers:{getFillColor:[energyType,minScore],getLineColor:[energyType,minScore]},
-        }),
-      ]:[]),
-
-      ...(showSuitability&&polyData&&minScore>1?[
-        new GeoJsonLayer({
-          id:`mask-${energyType}-${minScore}`,
-          data:{type:'FeatureCollection',features:(polyData.features||[]).filter(f=>(f.properties?.sinif??0)<minScore)},
-          pickable:false, filled:true, stroked:false,
-          getFillColor:[6,9,20,200],
-          parameters:{depthTest:false},
-          updateTriggers:{getFillColor:[minScore]},
         }),
       ]:[]),
 

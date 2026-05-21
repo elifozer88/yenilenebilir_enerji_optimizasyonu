@@ -1,23 +1,4 @@
-/**
- * pages/ReportsPage.js
- * İlçe bazlı uygunluk raporu — GES + RES skorları.
- */
 import { useState, useEffect } from 'react';
-
-const STATIC_DISTRICTS = [
-  { name:'Karaburun', area:479,  ges:4.2, res:4.9 },
-  { name:'Çeşme',     area:284,  ges:4.5, res:4.7 },
-  { name:'Seferihisar',area:401, ges:4.3, res:3.8 },
-  { name:'Dikili',    area:485,  ges:3.9, res:4.1 },
-  { name:'Ödemiş',    area:1133, ges:3.7, res:3.2 },
-  { name:'Urla',      area:392,  ges:4.1, res:3.9 },
-  { name:'Torbalı',   area:600,  ges:3.8, res:3.0 },
-  { name:'Tire',      area:843,  ges:3.6, res:3.4 },
-  { name:'Bergama',   area:1982, ges:3.5, res:3.8 },
-  { name:'Aliağa',    area:266,  ges:3.2, res:3.6 },
-  { name:'Menderes',  area:492,  ges:3.8, res:3.1 },
-  { name:'Selçuk',    area:423,  ges:3.9, res:2.9 },
-];
 
 const SORT_OPTIONS = [
   { val:'ges',  label:'GES Skoru' },
@@ -41,14 +22,59 @@ export default function ReportsPage({ onNavigate }) {
   const [sortBy,   setSortBy]   = useState('ges');
   const [gesStats, setGesStats] = useState(null);
   const [resStats, setResStats] = useState(null);
+  const [districts, setDistricts] = useState([]);
+  const [loading,   setLoading]   = useState(true);
 
-  // API'den gerçek istatistikleri çek
+  // API'den gerçek istatistikleri ve ilçe listesini çek
   useEffect(() => {
+    // İstatistikler
     fetch('/api/ges/stats').then(r => r.ok ? r.json() : null).then(d => d && setGesStats(d)).catch(() => {});
     fetch('/api/res/stats').then(r => r.ok ? r.json() : null).then(d => d && setResStats(d)).catch(() => {});
+
+    // İlçeler ve Skorlar
+    Promise.all([
+      fetch('/api/ges/districts').then(r => r.ok ? r.json() : null),
+      fetch('/api/res/districts').then(r => r.ok ? r.json() : null)
+    ])
+    .then(([gesData, resData]) => {
+      if (!gesData || !resData) return;
+      const merged = {};
+
+      gesData.features.forEach(f => {
+        const name = f.properties.ilce;
+        merged[name] = {
+          name,
+          ges: f.properties.skor_ort || 0,
+          // uygun_alan_ha'ı km2'ye çevir (1 km2 = 100 ha)
+          area: (f.properties.uygun_alan_ha || 0) / 100,
+          res: 0
+        };
+      });
+
+      resData.features.forEach(f => {
+        const name = f.properties.ilce;
+        if (merged[name]) {
+          merged[name].res = f.properties.skor_ort || 0;
+          // İki enerji tipi için uygun alanların max'ını veya toplamını alabiliriz. 
+          // Burada maksimumu almak (uygun coğrafi alanı temsil etmek için) daha makuldür.
+          merged[name].area = Math.max(merged[name].area, (f.properties.uygun_alan_ha || 0) / 100);
+        } else {
+          merged[name] = {
+            name,
+            ges: 0,
+            area: (f.properties.uygun_alan_ha || 0) / 100,
+            res: f.properties.skor_ort || 0
+          };
+        }
+      });
+
+      setDistricts(Object.values(merged));
+    })
+    .catch(() => {})
+    .finally(() => setLoading(false));
   }, []);
 
-  const sorted = [...STATIC_DISTRICTS].sort((a, b) => {
+  const sorted = [...districts].sort((a, b) => {
     if (sortBy === 'avg') return ((b.ges + b.res) / 2) - ((a.ges + a.res) / 2);
     if (sortBy === 'area') return b.area - a.area;
     return b[sortBy] - a[sortBy];
@@ -63,8 +89,16 @@ export default function ReportsPage({ onNavigate }) {
         İzmir ilçelerinin GES ve RES uygunluk skorları · AHP çok kriterli analiz sonuçları
       </div>
 
+      {/* Yükleniyor Uyarısı */}
+      {loading && (
+        <div style={{ padding: '24px 0', color: 'var(--text-2)', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ width: 14, height: 14, border: '2px solid #1a2035', borderTopColor: 'var(--ibb-green-l)', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+          Veriler yükleniyor…
+        </div>
+      )}
+
       {/* API istatistikleri (yüklendiyse) */}
-      {(gesStats || resStats) && (
+      {!loading && (gesStats || resStats) && (
         <div style={{ display:'flex', gap:14, marginBottom:24, flexWrap:'wrap' }}>
           {gesStats && (
             <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.25)', borderRadius:10, padding:'12px 18px' }}>
@@ -72,7 +106,7 @@ export default function ReportsPage({ onNavigate }) {
                 ☀️ GES · API Verileri
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'0 24px' }}>
-                {[['Min', gesStats.min],['Maks', gesStats.max],['Ort', gesStats.mean]].map(([l,v]) => (
+                {[['Min', gesStats.min ?? gesStats.min_skor],['Maks', gesStats.max ?? gesStats.max_skor],['Ort', gesStats.mean ?? gesStats.ort_skor]].map(([l,v]) => (
                   <div key={l}>
                     <div style={{ fontFamily:'var(--font-mono)', fontSize:15, fontWeight:700, color:'var(--ges)' }}>{v?.toFixed(2)}</div>
                     <div style={{ fontSize:9.5, color:'var(--text-2)' }}>{l} skor</div>
@@ -87,7 +121,7 @@ export default function ReportsPage({ onNavigate }) {
                 💨 RES · API Verileri
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'0 24px' }}>
-                {[['Min', resStats.min],['Maks', resStats.max],['Ort', resStats.mean]].map(([l,v]) => (
+                {[['Min', resStats.min ?? resStats.min_skor],['Maks', resStats.max ?? resStats.max_skor],['Ort', resStats.mean ?? resStats.ort_skor]].map(([l,v]) => (
                   <div key={l}>
                     <div style={{ fontFamily:'var(--font-mono)', fontSize:15, fontWeight:700, color:'var(--res)' }}>{v?.toFixed(2)}</div>
                     <div style={{ fontSize:9.5, color:'var(--text-2)' }}>{l} skor</div>

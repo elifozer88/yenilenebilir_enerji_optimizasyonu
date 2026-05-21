@@ -25,6 +25,7 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
       .then(d => { setData(d); setDone(ilceAdi + et); })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ilceAdi, et]);
 
   useEffect(() => {
@@ -43,10 +44,11 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
       setActiveRightTab('mahalle');
       setSelectedSantral(null);
     }
-    if (next && !santralData) {
+  };
+
+  useEffect(() => {
+    if (showSantraller && !santralData && !santralLoading) {
       setSantralLoading(true);
-      // /santral/list cek, frontend'de ilceye gore filtrele
-      // (ilce endpoint N+1 DB sorunu yapiyor, list daha guvenilir)
       fetch(`/api/santral/list?enerji=${et}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
@@ -62,7 +64,14 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
         .catch(() => setSantralData(null))
         .finally(() => setSantralLoading(false));
     }
-  };
+  }, [showSantraller, santralData, santralLoading, et, ilceAdi]);
+
+  useEffect(() => {
+    if (selectedSantral) {
+      setShowSantraller(true);
+      setActiveRightTab('santral');
+    }
+  }, [selectedSantral]);
 
   const sorted = useMemo(() => {
     if (!data?.features) return [];
@@ -372,6 +381,93 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
               </>
             )}
           </div>
+
+          {selectedSantral && activeRightTab === 'santral' && (
+            <div style={{
+              padding: '10px 14px',
+              background: 'rgba(20, 26, 40, 0.95)',
+              borderTop: `1px solid ${SANTRAL_HEX[et]}40`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.2)',
+              backdropFilter: 'blur(8px)',
+              position: 'relative',
+              zIndex: 10
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', fontWeight: 700 }}>
+                  Seçili Santral
+                </div>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: SANTRAL_HEX[et],
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {selectedSantral.properties?.santral_adi?.startsWith('OSM-')
+                    ? (et === 'GES' ? 'Güneş Enerji Santrali' : 'Rüzgâr Enerji Santrali')
+                    : selectedSantral.properties?.santral_adi}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={() => {
+                    if (selectedSantral.geometry?.coordinates) {
+                      const [lon, lat] = selectedSantral.geometry.coordinates;
+                      setMapCenter({
+                        lon,
+                        lat,
+                        zoom: 14.5 + (mapCenter?.zoom === 14.5 ? 0.001 : 0),
+                        label: 'santral',
+                        sinif: 4,
+                        alan_ha: 0
+                      });
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '6px 10px', borderRadius: 6,
+                    background: SANTRAL_HEX[et],
+                    color: '#000',
+                    border: 'none',
+                    fontSize: 10.5, fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 0.85}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 1}
+                >
+                  🔍 Odakla
+                </button>
+                <button
+                  onClick={() => setSelectedSantral(null)}
+                  style={{
+                    padding: '6px 10px', borderRadius: 6,
+                    background: 'rgba(255,255,255,0.08)',
+                    color: 'var(--text)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    fontSize: 10.5, fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+                  }}
+                >
+                  ✕ Temizle
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
