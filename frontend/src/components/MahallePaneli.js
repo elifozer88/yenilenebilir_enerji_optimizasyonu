@@ -311,7 +311,7 @@ export default function MahallePaneli({ ilceAdi, et, color }) {
                             </td>
                             <td style={{padding:'7px 10px',textAlign:'center',
                               color:'var(--text-2)',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>
-                              {(p.uygun_alan_ha||0).toLocaleString('tr')}
+                              {(p.uygun_alan_ha||0).toFixed(1)}
                             </td>
                             <td style={{padding:'7px 10px',textAlign:'center',
                               color:'#0EA5A4',fontFamily:'JetBrains Mono,monospace',fontSize:11}}>

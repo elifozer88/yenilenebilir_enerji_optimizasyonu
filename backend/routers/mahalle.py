@@ -23,57 +23,46 @@ async def get_mahalleler(ilce_adi: str, enerji: str = Query(default="GES")):
         if not ilce_row:
             raise HTTPException(status_code=404, detail=f"{ilce_adi} bulunamadı")
 
-        rows = await conn.fetch("""
+        q = """
             SELECT
-                COALESCE("name:tr", name, '') AS mahalle_adi,
-                ST_AsGeoJSON(geom) AS geom_json,
-                ST_X(ST_Centroid(geom)) AS cx,
-                ST_Y(ST_Centroid(geom)) AS cy
-            FROM enerji.osm_mahalle
-            WHERE admin_level = '8'
+                m.fid,
+                COALESCE(m."name:tr", m.name, '') AS mahalle_adi,
+                ST_AsGeoJSON(m.geom) AS geom_json,
+                ST_X(ST_Centroid(m.geom)) AS cx,
+                ST_Y(ST_Centroid(m.geom)) AS cy,
+                COALESCE(SUM(ST_Area(ST_Transform(ST_Intersection(ub.geom, m.geom), 32635)) / 10000.0), 0) AS uygun_alan_ha,
+                COALESCE(SUM(ub.uygunluk_sinif * ST_Area(ST_Transform(ST_Intersection(ub.geom, m.geom), 32635))) / 
+                         NULLIF(SUM(ST_Area(ST_Transform(ST_Intersection(ub.geom, m.geom), 32635))), 0), 0) AS skor_ort
+            FROM enerji.osm_mahalle m
+            LEFT JOIN (
+                SELECT ub_inner.geom, ub_inner.uygunluk_sinif
+                FROM enerji.uygunluk_bolge ub_inner
+                JOIN enerji.enerji_tipi et ON et.id = ub_inner.enerji_tipi_id
+                JOIN enerji.senaryo s ON s.id = ub_inner.senaryo_id
+                WHERE et.kod = $2 AND s.kod = 'varsayilan'
+            ) ub ON ST_Intersects(ub.geom, m.geom)
+            WHERE m.admin_level = '8'
               AND (
-                ST_Within(ST_Centroid(geom), $1::geometry)
+                ST_Within(ST_Centroid(m.geom), $1::geometry)
                 OR (
-                    ST_Intersects(geom, $1::geometry)
-                    AND ST_Area(ST_Intersection(geom, $1::geometry)) > ST_Area(geom) * 0.4
+                    ST_Intersects(m.geom, $1::geometry)
+                    AND ST_Area(ST_Intersection(m.geom, $1::geometry)) > ST_Area(m.geom) * 0.4
                 )
               )
+            GROUP BY m.fid, m.name, m."name:tr", m.geom
             ORDER BY mahalle_adi
-        """, ilce_row["geom"])
+        """
 
+        rows = await conn.fetch(q, ilce_row["geom"], enerji)
+
+        mw_ratio = 1.0 if enerji == "GES" else 0.5
         features = []
         for row in rows:
             name = row["mahalle_adi"]
             if not name:
                 continue
-            cx, cy = float(row["cx"]), float(row["cy"])
-            pt = f"ST_SetSRID(ST_MakePoint({cx},{cy}), 4326)"
-
-            # ── ilce_id NULL sorununu bypass et: sadece spatial + enerji_tipi filtrele ──
-            # 1. Merkez noktayı içeren polygon
-            skor_row = await conn.fetchrow(f"""
-                SELECT ub.uygunluk_sinif, ub.alan_ha, ub.tahmini_mw
-                FROM enerji.uygunluk_bolge ub
-                JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-                JOIN enerji.senaryo s ON s.id = ub.senaryo_id
-                WHERE et.kod = $1 AND s.kod = 'varsayilan'
-                  AND ST_Contains(ub.geom, {pt})
-                ORDER BY ub.uygunluk_sinif DESC
-                LIMIT 1
-            """, enerji)
-
-            # 2. Yoksa ilce geometrisi içindeki en yakın polygon
-            if not skor_row:
-                skor_row = await conn.fetchrow(f"""
-                    SELECT ub.uygunluk_sinif, ub.alan_ha, ub.tahmini_mw
-                    FROM enerji.uygunluk_bolge ub
-                    JOIN enerji.enerji_tipi et ON et.id = ub.enerji_tipi_id
-                    JOIN enerji.senaryo s ON s.id = ub.senaryo_id
-                    WHERE et.kod = $1 AND s.kod = 'varsayilan'
-                      AND ST_DWithin(ub.geom, {pt}, 0.05)
-                    ORDER BY ST_Distance(ub.geom, {pt}) ASC
-                    LIMIT 1
-                """, enerji)
+            uygun_alan = round(float(row["uygun_alan_ha"]), 2)
+            tahmini_mw = round(uygun_alan * mw_ratio, 2)
 
             features.append({
                 "type": "Feature",
@@ -81,9 +70,9 @@ async def get_mahalleler(ilce_adi: str, enerji: str = Query(default="GES")):
                 "properties": {
                     "mahalle":       name,
                     "ilce":          ilce_adi,
-                    "skor_ort":      float(skor_row["uygunluk_sinif"]) if skor_row else 0,
-                    "uygun_alan_ha": float(skor_row["alan_ha"] or 0) if skor_row else 0,
-                    "tahmini_mw":    float(skor_row["tahmini_mw"] or 0) if skor_row else 0,
+                    "skor_ort":      float(row["skor_ort"]),
+                    "uygun_alan_ha": uygun_alan,
+                    "tahmini_mw":    tahmini_mw,
                 },
             })
 
