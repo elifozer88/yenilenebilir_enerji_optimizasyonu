@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: ye_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
+      POSTGRES_DB: yenilenebilir
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ye_network
+
+  backend:
+    build: ./backend
+    container_name: ye_backend
+    restart: always
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=yenilenebilir
+      - DB_USER=postgres
+      - DB_PASS=${DB_PASSWORD:-1234}
+      # Tell rasterio/proj where to find projection files inside the container
+      - PROJ_DATA=/usr/local/lib/python3.10/site-packages/rasterio/proj_data
+    volumes:
+      - ./data:/app/data
+      - ./gadm41_TUR_2.json:/app/gadm41_TUR_2.json
+    depends_on:
+      - db
+    ports:
+      - "8003:8003"
+    networks:
+      - ye_network
+
+  frontend:
+    build: ./frontend
+    container_name: ye_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - ye_network
+
+volumes:
+  pgdata:
+
+networks:
+  ye_network:
+    driver: bridge
