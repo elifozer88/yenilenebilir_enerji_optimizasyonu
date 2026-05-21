@@ -111,6 +111,64 @@ Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şu
 
 ---
 
+## 🐳 Docker ile Hetzner Sunucu (VPS) Üzerinde Canlıya Alma (Production)
+
+Proje; PostGIS veritabanı, FastAPI backend servisi ve Nginx/React frontend yapısını içeren tam bir Docker orkestrasyonu (docker-compose) ile canlıya alınmaya hazır durumdadır.
+
+### 1. Sunucu Hazırlığı
+1. Hetzner Cloud üzerinden Ubuntu VPS (min. 4GB - 8GB RAM önerilir) oluşturun ve UFW güvenlik duvarında gerekli portlara izin verin:
+   ```bash
+   ufw allow OpenSSH
+   ufw allow 80
+   ufw allow 443
+   ufw enable
+   ```
+2. Sunucuya Docker ve Docker Compose kurulumunu yapın:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   ```
+3. Proje klasörünü `/opt/yeatlas` dizinine clone edin:
+   ```bash
+   git clone https://github.com/elifozer88/yenilenebilir_enerji_optimizasyonu.git /opt/yeatlas
+   cd /opt/yeatlas
+   ```
+
+### 2. Harita Raster Verilerinin ve Veritabanının Aktarılması
+1. Yerel bilgisayarınızdaki TIF harita dosyalarını sunucuya `scp` ile gönderin:
+   ```bash
+   # Windows PowerShell terminalinde
+   mkdir -p /opt/yeatlas/data  # (Sunucu tarafında)
+   scp "D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed\izmir_ges_uygunluk_v4.tif" root@<SUNUCU_IP>:/opt/yeatlas/data/
+   scp "D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed\izmir_res_uygunluk_v5.tif" root@<SUNUCU_IP>:/opt/yeatlas/data/
+   ```
+2. Yerel veritabanınızın yedeğini (`pg_dump`) alıp sunucuya gönderin:
+   ```bash
+   # Yerel Windows terminalinde
+   "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe" -U postgres -h localhost -p 5432 yenilenebilir > "C:\Users\eliff\yeatlas_backup.sql"
+   scp "C:\Users\eliff\yeatlas_backup.sql" root@<SUNUCU_IP>:/opt/yeatlas/
+   ```
+
+### 3. Hizmetleri Başlatma ve Veritabanı Geri Yükleme
+1. Sunucu üzerinde sadece veritabanı servisini başlatın:
+   ```bash
+   docker compose up -d db
+   ```
+2. Postgres yedeğini docker konteyneri içerisine aktarın:
+   ```bash
+   docker exec -i ye_db psql -U postgres -c "CREATE DATABASE yenilenebilir;"
+   docker exec -i ye_db psql -U postgres yenilenebilir < /opt/yeatlas/yeatlas_backup.sql
+   ```
+3. Tüm servisleri (FastAPI backend ve Nginx/React frontend) inşa edip arka planda başlatın:
+   ```bash
+   docker compose up -d --build
+   ```
+
+### 4. Yayını Doğrulama
+* **Frontend:** Tarayıcıdan `http://<SUNUCU_IP>` (Örn: `http://178.105.195.187`) adresine giderek uygulamanın açıldığını doğrulayabilirsiniz.
+* **API Sağlık Kontrolü:** `http://<SUNUCU_IP>/api/health` adresinden API servisinin `"status": "ok"` cevabı verdiğinden emin olun.
+
+---
+
 ## 👤 Varsayılan Giriş Bilgileri
 
 Uygulamanın yetkilendirme sistemini test etmek için aşağıdaki roller ve varsayılan kullanıcılar kullanılabilir:
