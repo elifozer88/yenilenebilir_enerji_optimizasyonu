@@ -9,10 +9,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
       POSTGRES_DB: yenilenebilir
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - ye_network
 
@@ -26,13 +29,13 @@ services:
       - DB_NAME=yenilenebilir
       - DB_USER=postgres
       - DB_PASS=${DB_PASSWORD:-1234}
-      # Tell rasterio/proj where to find projection files inside the container
-      - PROJ_DATA=/usr/local/lib/python3.10/site-packages/rasterio/proj_data
+      - JWT_SECRET=${JWT_SECRET:-degistir_bunu_guvensiz}
     volumes:
       - ./data:/app/data
       - ./gadm41_TUR_2.json:/app/gadm41_TUR_2.json
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8003:8003"
     networks:

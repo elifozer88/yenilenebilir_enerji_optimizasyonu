@@ -7,12 +7,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
     libproj-dev \
     proj-bin \
+    proj-data \
     libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables for GDAL/PROJ
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
+# Use system PROJ data (from proj-data apt package)
+ENV PROJ_DATA=/usr/share/proj
 
 WORKDIR /app
 

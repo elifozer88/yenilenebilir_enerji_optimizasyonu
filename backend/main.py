@@ -1,10 +1,15 @@
 import os
 
-# Set PROJ_DATA cross-platform
+# Set PROJ_DATA for local Windows dev only (Docker sets it via ENV in Dockerfile)
 if "PROJ_DATA" not in os.environ:
-    local_proj_data = r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
-    if os.path.exists(local_proj_data):
-        os.environ["PROJ_DATA"] = local_proj_data
+    candidates = [
+        r"D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data",
+        r"C:\Users\eliff\AppData\Local\Programs\Python\Python310\Lib\site-packages\rasterio\proj_data",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            os.environ["PROJ_DATA"] = path
+            break
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
