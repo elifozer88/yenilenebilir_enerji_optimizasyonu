@@ -16,8 +16,8 @@ function getSinifRgba(props, mode='fill') {
     s = skor >= 4 ? 5 : skor >= 3 ? 4 : skor >= 2 ? 3 : skor >= 1 ? 2 : 1;
   }
   s = Math.round(Number(s));
-  const FILL   = {5:[20,128,60,90], 4:[74,166,53,80], 3:[215,119,6,70], 2:[220,107,46,60], 1:[185,28,28,45]};
-  const STROKE = {5:[20,128,60,180],4:[74,166,53,160],3:[215,119,6,150],2:[220,107,46,130],1:[185,28,28,110]};
+  const FILL   = { 5:[20,128,60,110], 4:[74,166,53,95], 3:[215,119,6,70], 2:[220,107,46,60], 1:[185,28,28,45] };
+  const STROKE = { 5:[20,128,60,200], 4:[74,166,53,180], 3:[215,119,6,150], 2:[220,107,46,130], 1:[185,28,28,110] };
   return (mode==='fill' ? FILL[s] : STROKE[s]) || [100,100,100, mode==='fill'?40:120];
 }
 
@@ -40,9 +40,18 @@ function geomToView(geom) {
 }
 
 export default function MapView({
-  energyType='GES', minScore=1,
-  onStatsUpdate, cityFocus=false, show3D=true, showSuitability=true, showSantral=true,
-  flyToIlce=null, senaryo='varsayilan', selectedIlce=null, onIlceClick=null,
+  energyType   = 'GES',
+  minScore     = 4,
+  showTileLayer = false,   // ← YENİ: false = sadece polygon sınıf 4-5, true = raster overlay
+  onStatsUpdate,
+  cityFocus    = false,
+  show3D       = true,
+  showSuitability = true,
+  showSantral  = false,
+  flyToIlce    = null,
+  senaryo      = 'varsayilan',
+  selectedIlce = null,
+  onIlceClick  = null,
 }) {
   const [viewState,    setViewState]    = useState(INITIAL_VIEW);
   const [districtData, setDistrictData] = useState(null);
@@ -52,186 +61,228 @@ export default function MapView({
   const pendingFly = useRef(null);
 
   useEffect(() => {
-    if(cityFocus==null) return;
-    setViewState(p=>({...p,...(cityFocus?CITY_VIEW:INITIAL_VIEW),
-      transitionDuration:1600, transitionInterpolator:new FlyToInterpolator({speed:1.3})}));
+    if (cityFocus == null) return;
+    setViewState(p => ({
+      ...p, ...(cityFocus ? CITY_VIEW : INITIAL_VIEW),
+      transitionDuration: 1600,
+      transitionInterpolator: new FlyToInterpolator({ speed: 1.3 }),
+    }));
   }, [cityFocus]);
 
-  // ── FİX 1: selectedIlce temizlenince INITIAL_VIEW'a geri dön ──
+  // selectedIlce temizlenince INITIAL_VIEW'a geri dön
   useEffect(() => {
-    if(!selectedIlce) {
-      setViewState(p=>({
+    if (!selectedIlce) {
+      setViewState(p => ({
         ...p, ...INITIAL_VIEW,
-        transitionDuration:1400,
-        transitionInterpolator:new FlyToInterpolator({speed:1.2}),
+        transitionDuration: 1400,
+        transitionInterpolator: new FlyToInterpolator({ speed: 1.2 }),
       }));
     }
   }, [selectedIlce]);
 
   const doFlyTo = useCallback((ilceAdi, data) => {
-    if(!ilceAdi||!data) return false;
-    const feat=data.features.find(f=>f.properties?.ilce?.toLowerCase()===ilceAdi.toLowerCase());
-    if(!feat?.geometry) return false;
-    const v=geomToView(feat.geometry);
-    if(!v) return false;
-    setViewState(p=>({...p,...v,
-      transitionDuration:1500, transitionInterpolator:new FlyToInterpolator({speed:1.4})}));
+    if (!ilceAdi || !data) return false;
+    const feat = data.features.find(
+      f => f.properties?.ilce?.toLowerCase() === ilceAdi.toLowerCase()
+    );
+    if (!feat?.geometry) return false;
+    const v = geomToView(feat.geometry);
+    if (!v) return false;
+    setViewState(p => ({
+      ...p, ...v,
+      transitionDuration: 1500,
+      transitionInterpolator: new FlyToInterpolator({ speed: 1.4 }),
+    }));
     return true;
-  },[]);
+  }, []);
 
-  useEffect(()=>{
-    if(!flyToIlce) return;
-    const ilce=flyToIlce.split('_')[0];
-    if(districtData){ doFlyTo(ilce,districtData); }
-    else { pendingFly.current=ilce; }
-  },[flyToIlce,districtData,doFlyTo]);
+  useEffect(() => {
+    if (!flyToIlce) return;
+    const ilce = flyToIlce.split('_')[0];
+    if (districtData) { doFlyTo(ilce, districtData); }
+    else { pendingFly.current = ilce; }
+  }, [flyToIlce, districtData, doFlyTo]);
 
-  useEffect(()=>{
+  // Veri çekme
+  useEffect(() => {
     abortRef.current?.abort();
-    const ctrl=new AbortController();
-    abortRef.current=ctrl;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     setDistrictData(null);
     setPolyData(null);
 
-    const t=energyType.toLowerCase();
+    const t = energyType.toLowerCase();
 
-    fetch(`/api/${t}/stats`,{signal:ctrl.signal})
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d&&onStatsUpdate) onStatsUpdate({
-        count:d.ilce_sayisi??0, avgScore:String(d.ort_skor??'—'),
-        maxScore:String(d.max_skor??'—'), totalHa:d.toplam_uygun_ha??0,
-      });}).catch(()=>{});
+    fetch(`/api/${t}/stats`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && onStatsUpdate) onStatsUpdate({
+          count:    d.ilce_sayisi    ?? 0,
+          avgScore: String(d.ort_skor  ?? '—'),
+          maxScore: String(d.max_skor  ?? '—'),
+          totalHa:  d.toplam_uygun_ha ?? 0,
+        });
+      }).catch(() => {});
 
-    const p1=fetch(`/api/${t}/districts?senaryo=${senaryo}`,{signal:ctrl.signal})
-      .then(r=>r.ok?r.json():null)
-      .then(gj=>{
-        if(!gj) return;
+    const p1 = fetch(`/api/${t}/districts?senaryo=${senaryo}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(gj => {
+        if (!gj) return;
         setDistrictData(gj);
-        if(pendingFly.current){ doFlyTo(pendingFly.current,gj); pendingFly.current=null; }
-      }).catch(()=>{});
+        if (pendingFly.current) {
+          doFlyTo(pendingFly.current, gj);
+          pendingFly.current = null;
+        }
+      }).catch(() => {});
 
-    let p2 = Promise.resolve(null);
-    if (selectedIlce) {
-      p2 = fetch(`/api/${t}/polygons?min_sinif=${minScore}&senaryo=${senaryo}&limit=3000&ilce=${encodeURIComponent(selectedIlce)}`,{signal:ctrl.signal})
-        .then(r=>r.ok?r.json():null)
-        .then(gj=>{ if(gj) setPolyData(gj); }).catch(()=>{});
-    }
+    // Polygon çekme: ilçe seçiliyse o ilçenin sınıf>=minScore bölgeleri,
+    // seçili değilse tüm İzmir sınıf>=minScore (limit 1500)
+    const polyUrl = selectedIlce
+      ? `/api/${t}/polygons?min_sinif=${minScore}&senaryo=${senaryo}&limit=3000&ilce=${encodeURIComponent(selectedIlce)}`
+      : `/api/${t}/polygons?min_sinif=${minScore}&senaryo=${senaryo}&limit=1500`;
 
-    Promise.allSettled([p1,p2]).finally(()=>setLoading(false));
-    return()=>ctrl.abort();
-  },[energyType,senaryo,minScore,selectedIlce,doFlyTo,onStatsUpdate]);
+    const p2 = fetch(polyUrl, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(gj => { if (gj) setPolyData(gj); })
+      .catch(() => {});
+
+    Promise.allSettled([p1, p2]).finally(() => setLoading(false));
+    return () => ctrl.abort();
+  }, [energyType, senaryo, minScore, selectedIlce, doFlyTo, onStatsUpdate]);
 
   const zoom = viewState.zoom;
 
-  const layers = useMemo(()=>{
-    const t=energyType.toLowerCase();
+  const layers = useMemo(() => {
+    const t = energyType.toLowerCase();
 
     return [
+      // 1. Terrain (3D yüzey)
       new TerrainLayer({
-        id:'terrain', minZoom:0, maxZoom:13, strategy:'no-overlap',
-        elevationDecoder:{rScaler:6553.6,gScaler:25.6,bScaler:0.1,offset:-10000},
-        elevationData:`https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
-        texture:`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
-        elevationScale:show3D?2.8:0.1, wireframe:false, parameters:{depthTest:true},
+        id: 'terrain',
+        minZoom: 0, maxZoom: 13, strategy: 'no-overlap',
+        elevationDecoder: { rScaler:6553.6, gScaler:25.6, bScaler:0.1, offset:-10000 },
+        elevationData: `https://api.maptiler.com/tiles/terrain-rgb/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
+        texture: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
+        elevationScale: show3D ? 2.8 : 0.1,
+        wireframe: false,
+        parameters: { depthTest: true },
       }),
 
-      ...(zoom>=12 ? [
+      // 2. Yüksek zoom için uydu fallback
+      ...(zoom >= 12 ? [
         new TileLayer({
-          id:'satellite-fallback',
-          data:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          minZoom:12, maxZoom:20, tileSize:256,
-          renderSubLayers:p=>{
-            const {west,south,east,north}=p.tile.bbox;
-            return new BitmapLayer(p,{data:null,image:p.data,bounds:[west,south,east,north]});
+          id: 'satellite-fallback',
+          data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          minZoom: 12, maxZoom: 20, tileSize: 256,
+          renderSubLayers: p => {
+            const { west, south, east, north } = p.tile.bbox;
+            return new BitmapLayer(p, { data:null, image:p.data, bounds:[west,south,east,north] });
           },
         }),
-      ]:[]),
+      ] : []),
 
-      // 3. Raster suitability tiles — colors the entire map instantly
-      ...(showSuitability ? [
+      // 3. Raster tile overlay — sadece showTileLayer=true ise aktif
+      ...(showSuitability && showTileLayer ? [
         new TileLayer({
           id: `suitability-tiles-${t}-${minScore}-${senaryo}`,
           data: `/api/tiles/${t}/{z}/{x}/{y}.png?min_score=${minScore}&senaryo=${senaryo}`,
-          minZoom: 0,
-          maxZoom: 14,
-          tileSize: 256,
-          opacity: 0.85,
+          minZoom: 0, maxZoom: 14, tileSize: 256, opacity: 0.85,
           renderSubLayers: p => {
             const { west, south, east, north } = p.tile.bbox;
             return new BitmapLayer(p, {
-              data: null,
-              image: p.data,
+              data: null, image: p.data,
               bounds: [west, south, east, north],
-              parameters: { depthTest: false }
+              parameters: { depthTest: false },
             });
           },
-        })
+        }),
       ] : []),
 
-      ...(showSuitability&&polyData?[
+      // 4. Polygon layer — sınıf >= minScore (varsayılan: sadece 4-5)
+      ...(showSuitability && polyData ? [
         new GeoJsonLayer({
-          id:`poly-fill-${energyType}`,
-          data:{type:'FeatureCollection',features:(polyData.features||[]).filter(f=>(f.properties?.sinif??0)>=minScore)},
-          pickable:true,
-          filled:true,
-          stroked:true,
-          getFillColor:   f => getSinifRgba(f.properties, 'fill'),
-          getLineColor:   f => getSinifRgba(f.properties, 'stroke'),
-          lineWidthMinPixels:0.6,
-          parameters:{depthTest:false},
-          updateTriggers:{getFillColor:[energyType,minScore],getLineColor:[energyType,minScore]},
+          id: `poly-fill-${energyType}`,
+          data: {
+            type: 'FeatureCollection',
+            features: (polyData.features || []).filter(
+              f => (f.properties?.sinif ?? 0) >= minScore
+            ),
+          },
+          pickable: true,
+          filled: true,
+          stroked: true,
+          getFillColor:  f => getSinifRgba(f.properties, 'fill'),
+          getLineColor:  f => getSinifRgba(f.properties, 'stroke'),
+          lineWidthMinPixels: 0.8,
+          parameters: { depthTest: false },
+          updateTriggers: {
+            getFillColor: [energyType, minScore],
+            getLineColor: [energyType, minScore],
+          },
         }),
-      ]:[]),
+      ] : []),
 
-      ...(districtData?[
+      // 5. İlçe sınırları
+      ...(districtData ? [
         new GeoJsonLayer({
-          id:`districts-${energyType}`,
-          data:districtData, pickable:true, filled:false, stroked:true,
-          getLineColor:[255,179,71,90], lineWidthMinPixels:0.9,
-          parameters:{depthTest:false},
+          id: `districts-${energyType}`,
+          data: districtData,
+          pickable: true, filled: false, stroked: true,
+          getLineColor: [255, 179, 71, 90],
+          lineWidthMinPixels: 0.9,
+          parameters: { depthTest: false },
         }),
-      ]:[]),
+      ] : []),
 
-      ...(districtData&&selectedIlce?(()=>{
-        const feat=districtData.features.find(f=>f.properties?.ilce?.toLowerCase()===selectedIlce.toLowerCase());
-        if(!feat) return [];
+      // 6. Seçili ilçe vurgusu
+      ...(districtData && selectedIlce ? (() => {
+        const feat = districtData.features.find(
+          f => f.properties?.ilce?.toLowerCase() === selectedIlce.toLowerCase()
+        );
+        if (!feat) return [];
         return [
           new GeoJsonLayer({
-            id:`sel-fill-${selectedIlce}`,
-            data:{type:'FeatureCollection',features:[feat]},
-            pickable:false,filled:true,stroked:false,
-            getFillColor:[255,255,255,18],
-            parameters:{depthTest:false},
+            id: `sel-fill-${selectedIlce}`,
+            data: { type:'FeatureCollection', features:[feat] },
+            pickable: false, filled: true, stroked: false,
+            getFillColor: [255, 255, 255, 18],
+            parameters: { depthTest: false },
           }),
           new GeoJsonLayer({
-            id:`sel-border-${selectedIlce}`,
-            data:{type:'FeatureCollection',features:[feat]},
-            pickable:false,filled:false,stroked:true,
-            getLineColor:[255,255,255,220],lineWidthMinPixels:2.8,
-            parameters:{depthTest:false},
+            id: `sel-border-${selectedIlce}`,
+            data: { type:'FeatureCollection', features:[feat] },
+            pickable: false, filled: false, stroked: true,
+            getLineColor: [255, 255, 255, 220],
+            lineWidthMinPixels: 2.8,
+            parameters: { depthTest: false },
           }),
         ];
-      })():[]),
+      })() : []),
     ];
-  },[districtData,polyData,energyType,minScore,show3D,showSuitability,selectedIlce,zoom,senaryo]);
+  }, [districtData, polyData, energyType, minScore, show3D, showSuitability,
+      showTileLayer, selectedIlce, zoom, senaryo]);
 
-  const getTooltip=useCallback(({object})=>buildTooltip(object,energyType),[energyType]);
+  const getTooltip = useCallback(
+    ({ object }) => buildTooltip(object, energyType),
+    [energyType]
+  );
 
-  return(
+  return (
     <>
-      {loading&&(
+      {loading && (
         <div style={{
-          position:'absolute',inset:0,zIndex:200,
-          display:'flex',alignItems:'center',justifyContent:'center',
-          background:'rgba(6,10,20,0.55)',backdropFilter:'blur(4px)',
-          color:'#8892aa',fontSize:13,fontFamily:"'Manrope',sans-serif",
-          gap:10,pointerEvents:'none',
+          position:'absolute', inset:0, zIndex:200,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          background:'rgba(6,10,20,0.55)', backdropFilter:'blur(4px)',
+          color:'#8892aa', fontSize:13, fontFamily:"'Manrope',sans-serif",
+          gap:10, pointerEvents:'none',
         }}>
           <div style={{
-            width:18,height:18,border:'2px solid #1a2035',
-            borderTopColor:energyType==='GES'?'#F59E0B':'#38BDF8',
-            borderRadius:'50%',animation:'spin .8s linear infinite',
+            width:18, height:18,
+            border:'2px solid #1a2035',
+            borderTopColor: energyType==='GES' ? '#F59E0B' : '#38BDF8',
+            borderRadius:'50%', animation:'spin .8s linear infinite',
           }}/>
           Yükleniyor…
         </div>
@@ -239,21 +290,17 @@ export default function MapView({
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <DeckGL
         viewState={viewState}
-        onViewStateChange={({viewState:vs})=>setViewState(vs)}
-        controller={{
-          inertia:300,
-          scrollZoom:{smooth:true, speed:0.015},
-          dragRotate:true,
-        }}
+        onViewStateChange={({ viewState: vs }) => setViewState(vs)}
+        controller={{ inertia:300, scrollZoom:{ smooth:true, speed:0.015 }, dragRotate:true }}
         layers={layers}
         getTooltip={getTooltip}
-        onClick={({object})=>{
-          if(!object?.properties) return;
-          const p=object.properties;
-          const ilce=p.ilce_adi||p.ilce;
-          if(ilce&&onIlceClick) onIlceClick(ilce);
+        onClick={({ object }) => {
+          if (!object?.properties) return;
+          const p = object.properties;
+          const ilce = p.ilce_adi || p.ilce;
+          if (ilce && onIlceClick) onIlceClick(ilce);
         }}
-        style={{position:'absolute',inset:0}}
+        style={{ position:'absolute', inset:0 }}
       />
     </>
   );

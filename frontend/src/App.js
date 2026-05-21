@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import MapView from './components/Map';
 import Santraller from './components/Santraller';
 import IlceKarsilastirma from './components/IlceKarsilastirma';
@@ -6,24 +6,22 @@ import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import './Atlas.css';
 
-// Global fetch interceptor for Bearer token injection and 401 handling
+// Global fetch interceptor — Bearer token + 401
 const originalFetch = window.fetch;
 window.fetch = async function (url, options = {}) {
   const token = localStorage.getItem('yeatlas_token');
   if (token && (url.startsWith('/api') || url.startsWith('api') || url.includes('/api/'))) {
     options.headers = options.headers || {};
-    if (!options.headers['Authorization']) {
+    if (!options.headers['Authorization'])
       options.headers['Authorization'] = `Bearer ${token}`;
-    }
   }
   const response = await originalFetch(url, options);
-  if (response.status === 401 && !url.includes('/api/auth/giris')) {
+  if (response.status === 401 && !url.includes('/api/auth/giris'))
     window.dispatchEvent(new CustomEvent('yeatlas_unauthorized'));
-  }
   return response;
 };
 
-// ── SVG İllüstrasyonları ──────────────────────────────────────
+// ── SVG ────────────────────────────────────────────────────
 const GESIllustration = () => (
   <svg width="100%" viewBox="0 0 280 160" style={{display:'block',marginBottom:12}}>
     <ellipse cx="140" cy="150" rx="140" ry="18" fill="currentColor" opacity="0.08"/>
@@ -100,30 +98,20 @@ const RESIllustration = () => (
   </svg>
 );
 
-const SunIcon = ({ size = 22 }) => (
+const SunIcon  = ({ size=22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <circle cx="12" cy="12" r="4.5" fill="currentColor" fillOpacity="0.18"/>
     <path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8l1.8-1.8M18 6l1.8-1.8"/>
   </svg>
 );
-const WindIcon = ({ size = 22 }) => (
+const WindIcon = ({ size=22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
     <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
     <path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/>
   </svg>
 );
-const MapIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-    <path d="M3 6l3 12 6-3 6 3 3-12-9 3z"/>
-  </svg>
-);
-const ArrowIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-    <path d="M5 12h14M13 5l7 7-7 7"/>
-  </svg>
-);
-const SolarPanelIcon = ({ size = 26 }) => (
+const SolarPanelIcon = ({ size=26 }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6">
     <rect x="3" y="7" width="26" height="18" rx="2" strokeOpacity="0.6"/>
     <line x1="3" y1="12" x2="29" y2="12" strokeOpacity="0.5"/>
@@ -137,7 +125,7 @@ const SolarPanelIcon = ({ size = 26 }) => (
     <path d="M26 1.5v1M26 8v1M22.5 5h1M29.5 5h1M23.7 2.7l0.7 0.7M28.6 7.6l0.7 0.7M23.7 7.3l0.7-0.7M28.6 2.4l0.7-0.7" strokeWidth="1" strokeLinecap="round"/>
   </svg>
 );
-const TurbineIcon = ({ size = 26 }) => (
+const TurbineIcon = ({ size=26 }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6">
     <line x1="16" y1="14" x2="16" y2="30" strokeLinecap="round"/>
     <circle cx="16" cy="14" r="2" fill="currentColor" fillOpacity="0.4"/>
@@ -148,164 +136,138 @@ const TurbineIcon = ({ size = 26 }) => (
   </svg>
 );
 
+const WEIGHTS_GES = {
+  solar: 32, arazi: 25, egim: 11, baki: 9, enerji: 8, yerlesim: 7, yol: 4, fay: 3, akarsu: 1
+};
+const WEIGHTS_RES = {
+  ruzgar: 30, arazi: 27, yukseklik: 13, yerlesim: 10, enerji: 6, egim: 5, yol: 4, fay: 3, akarsu: 2
+};
+
+const GES_CRITERIA = [
+  { id: 'solar', k: 'Solar Radyasyon', c: '#F59E0B' },
+  { id: 'arazi', k: 'Arazi Kullanımı', c: '#60A5FA' },
+  { id: 'egim', k: 'Eğim & Bakı', c: '#10B981' },
+  { id: 'baki', k: 'Bakı', c: '#A78BFA' },
+  { id: 'enerji', k: 'ENH Yakınlığı', c: '#FB923C' },
+  { id: 'yerlesim', k: 'Yerleşim', c: '#F472B6' },
+  { id: 'yol', k: 'Yola Yakınlık', c: '#34D399' },
+  { id: 'fay', k: 'Fay Uzaklığı', c: '#94A3B8' },
+  { id: 'akarsu', k: 'Akarsu', c: '#67E8F9' },
+];
+
+const RES_CRITERIA = [
+  { id: 'ruzgar', k: 'Rüzgâr Hızı', c: '#38BDF8' },
+  { id: 'arazi', k: 'Arazi Kullanımı', c: '#60A5FA' },
+  { id: 'yukseklik', k: 'Yükseklik', c: '#FDE68A' },
+  { id: 'yerlesim', k: 'Yerleşim', c: '#F472B6' },
+  { id: 'enerji', k: 'ENH Yakınlığı', c: '#FB923C' },
+  { id: 'egim', k: 'Eğim', c: '#10B981' },
+  { id: 'yol', k: 'Yola Yakınlık', c: '#34D399' },
+  { id: 'fay', k: 'Fay Uzaklığı', c: '#94A3B8' },
+  { id: 'akarsu', k: 'Akarsu', c: '#67E8F9' },
+];
+
+// ── App ─────────────────────────────────────────────────────
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('yeatlas_token') || null);
-  const [user, setUser] = useState(() => {
-    try {
-      const u = localStorage.getItem('yeatlas_user');
-      return u ? JSON.parse(u) : null;
-    } catch {
-      return null;
-    }
+  const [user,  setUser]  = useState(() => {
+    try { const u = localStorage.getItem('yeatlas_user'); return u ? JSON.parse(u) : null; } catch { return null; }
   });
   const [permissions, setPermissions] = useState(() => {
-    try {
-      const p = localStorage.getItem('yeatlas_permissions');
-      return p ? JSON.parse(p) : null;
-    } catch {
-      return null;
-    }
+    try { const p = localStorage.getItem('yeatlas_permissions'); return p ? JSON.parse(p) : null; } catch { return null; }
   });
 
-  const [page, setPage]           = useState('home');
-  const [theme, setTheme]         = useState('dark');
-  const [energyType, setEnergy]   = useState('GES');
+  const [page,             setPage]             = useState('home');
+  const [theme,            setTheme]            = useState('dark');
+  const [energyType,       setEnergy]           = useState('GES');
+  const [apiStats,         setApiStats]         = useState({ ges:null, res:null });
+  const [cityFocus,        setCityFocus]        = useState(false);
+  const [flyToIlce,        setFlyToIlce]        = useState(null);
+  const [selectedIlce,     setSelectedIlce]     = useState('');
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [senaryo]                               = useState('varsayilan');
+  const [ilceDetay,        setIlceDetay]        = useState(null);
+  const [ilceLoading,      setIlceLoading]      = useState(false);
+  const [ilceler,          setIlceler]          = useState([]);
+  const [havaDetay,        setHavaDetay]        = useState(null);
+  const [rankedDistricts,  setRankedDistricts]  = useState([]);
   const minScore = 1;
-  // eslint-disable-next-line no-unused-vars
-  const [stats, setStats]         = useState({ count:0, avgScore:'—', maxScore:'—', totalHa:0, totalMw:0 });
-  const [apiStats, setApiStats]   = useState({ ges:null, res:null });
-  const [cityFocus, setCityFocus] = useState(false);
-  const [show3D]                  = useState(true);
-  const [flyToIlce, setFlyToIlce] = useState(null);
-  const [selectedIlce, setSelectedIlce] = useState('');
-  const [senaryo]                 = useState('varsayilan');
-  const [ilceDetay, setIlceDetay]     = useState(null);
-  const [ilceLoading, setIlceLoading] = useState(false);
-  const [ilceler, setIlceler]     = useState([]);
-  const [havaDetay, setHavaDetay] = useState(null);
-  const [rankedDistricts, setRankedDistricts] = useState([]);
 
-  const WEIGHTS_GES = useMemo(() => ({
-    solar:32, arazi:25, egim:11, baki:9, enerji:8, yerlesim:7, yol:4, fay:3, akarsu:1
-  }), []);
-  const WEIGHTS_RES = useMemo(() => ({
-    ruzgar:30, arazi:27, yukseklik:13, yerlesim:10, enerji:6, egim:5, yol:4, fay:3, akarsu:2
-  }), []);
+  const heroOverlayLeft   = theme === 'light'
+    ? 'linear-gradient(100deg, rgba(248,250,252,0.65) 0%, rgba(248,250,252,0.45) 38%, rgba(248,250,252,0.10) 65%, rgba(248,250,252,0.0) 100%)'
+    : 'linear-gradient(100deg, rgba(4,8,18,0.78) 0%, rgba(4,8,18,0.62) 38%, rgba(4,8,18,0.28) 65%, rgba(4,8,18,0.0) 100%)';
+  const heroOverlayBottom = theme === 'light'
+    ? 'linear-gradient(180deg, transparent 50%, rgba(248,250,252,0.6) 100%)'
+    : 'linear-gradient(180deg, transparent 50%, rgba(4,8,18,0.6) 100%)';
+  const heroTextColor = theme === 'light' ? '#0f172a' : undefined;
+  const heroSubColor  = theme === 'light' ? '#334155' : undefined;
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('yeatlas_token');
     localStorage.removeItem('yeatlas_user');
     localStorage.removeItem('yeatlas_permissions');
-    setToken(null);
-    setUser(null);
-    setPermissions(null);
-    setPage('home');
+    setToken(null); setUser(null); setPermissions(null); setPage('home');
   }, []);
 
   const navigateTo = useCallback((targetPage) => {
-    if (targetPage === 'home') {
-      setPage('home');
-      return;
-    }
-    if (targetPage === 'admin') {
-      if (user?.rol === 'admin') {
-        setPage('admin');
-      } else {
-        setPage('home');
-      }
-      return;
-    }
-    if (permissions && permissions[targetPage]) {
-      setPage(targetPage);
-    } else {
-      setPage('home');
-    }
+    if (targetPage === 'home')  { setPage('home'); return; }
+    if (targetPage === 'admin') { if (user?.rol === 'admin') setPage('admin'); else setPage('home'); return; }
+    if (permissions?.[targetPage]) setPage(targetPage);
+    else setPage('home');
   }, [permissions, user]);
 
-  const handleLogin = (t, u, p) => {
-    setToken(t);
-    setUser(u);
-    setPermissions(p);
-    setPage('home');
-  };
+  const handleLogin = (t, u, p) => { setToken(t); setUser(u); setPermissions(p); setPage('home'); };
 
   useEffect(() => {
-    const handleUnauthorized = () => {
-      handleLogout();
-    };
-    window.addEventListener('yeatlas_unauthorized', handleUnauthorized);
-    return () => {
-      window.removeEventListener('yeatlas_unauthorized', handleUnauthorized);
-    };
+    const fn = () => handleLogout();
+    window.addEventListener('yeatlas_unauthorized', fn);
+    return () => window.removeEventListener('yeatlas_unauthorized', fn);
   }, [handleLogout]);
 
   useEffect(() => {
-    if (token) {
-      fetch('/api/auth/ben')
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('Unauthorized');
-        })
-        .then(data => {
-          setUser(data.kullanici);
-          setPermissions(data.permissions);
-          localStorage.setItem('yeatlas_user', JSON.stringify(data.kullanici));
-          localStorage.setItem('yeatlas_permissions', JSON.stringify(data.permissions));
-        })
-        .catch(() => {
-          handleLogout();
-        });
-    }
+    if (!token) return;
+    fetch('/api/auth/ben')
+      .then(r => { if (r.ok) return r.json(); throw new Error(); })
+      .then(d => {
+        setUser(d.kullanici); setPermissions(d.permissions);
+        localStorage.setItem('yeatlas_user', JSON.stringify(d.kullanici));
+        localStorage.setItem('yeatlas_permissions', JSON.stringify(d.permissions));
+      })
+      .catch(() => handleLogout());
   }, [token, handleLogout]);
 
   useEffect(() => {
-    if (token && permissions) {
-      if (page === 'atlas' && !permissions.atlas) {
-        setPage('home');
-      } else if (page === 'raporlar' && !permissions.raporlar) {
-        setPage('home');
-      } else if (page === 'santraller' && !permissions.santraller) {
-        setPage('home');
-      } else if (page === 'admin' && user?.rol !== 'admin') {
-        setPage('home');
-      }
-    }
+    if (!token || !permissions) return;
+    if (page === 'atlas'      && !permissions.atlas)      setPage('home');
+    if (page === 'raporlar'   && !permissions.raporlar)   setPage('home');
+    if (page === 'santraller' && !permissions.santraller) setPage('home');
+    if (page === 'admin'      && user?.rol !== 'admin')   setPage('home');
   }, [permissions, page, token, user]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
 
   useEffect(() => {
-    if (!token) return;
-    if(!selectedIlce){ setIlceDetay(null); setHavaDetay(null); return; }
+    if (!token || !selectedIlce) { setIlceDetay(null); setHavaDetay(null); return; }
     setIlceLoading(true);
     fetch(`/api/${energyType.toLowerCase()}/district/${encodeURIComponent(selectedIlce)}`)
-      .then(r=>r.ok?r.json():null)
-      .then(d=>setIlceDetay(d))
-      .catch(()=>setIlceDetay(null))
-      .finally(()=>setIlceLoading(false));
+      .then(r => r.ok ? r.json() : null).then(d => setIlceDetay(d)).catch(() => setIlceDetay(null))
+      .finally(() => setIlceLoading(false));
     fetch(`/api/hava/ilce/${encodeURIComponent(selectedIlce)}`)
-      .then(r=>r.ok?r.json():null)
-      .then(d=>setHavaDetay(d))
-      .catch(()=>setHavaDetay(null));
+      .then(r => r.ok ? r.json() : null).then(d => setHavaDetay(d)).catch(() => setHavaDetay(null));
   }, [selectedIlce, energyType, token]);
 
   useEffect(() => {
     if (!token) return;
-    const t = energyType.toLowerCase();
-    fetch(`/api/${t}/districts?senaryo=${senaryo}`)
-      .then(r=>r.ok?r.json():null)
-      .then(gj=>{
-        if(!gj?.features) return;
-        const list = gj.features.map(f=>({
-          ilce: f.properties.ilce,
-          skor: f.properties.skor_ort || 0
-        })).sort((a,b)=>b.skor-a.skor);
+    fetch(`/api/${energyType.toLowerCase()}/districts?senaryo=${senaryo}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(gj => {
+        if (!gj?.features) return;
+        const list = gj.features
+          .map(f => ({ ilce: f.properties.ilce, skor: f.properties.skor_ort || 0 }))
+          .sort((a,b) => b.skor - a.skor);
         setRankedDistricts(list);
-        const names = list.map(item=>item.ilce).sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
-        setIlceler(names);
-      }).catch(()=>{});
+        setIlceler(list.map(i => i.ilce).sort((a,b) => a.localeCompare(b,'tr',{sensitivity:'base'})));
+      }).catch(() => {});
   }, [energyType, senaryo, token]);
 
   useEffect(() => {
@@ -318,60 +280,23 @@ export default function App() {
     });
   }, [token]);
 
-  const handleStatsUpdate = useCallback((s) => setStats(s), []);
+  // eslint-disable-next-line no-unused-vars
+  const handleStatsUpdate = useCallback((s) => {}, []);
 
-  const goAtlas = (et) => {
-    if (permissions?.atlas) {
-      if (et) setEnergy(et);
-      setPage('atlas');
-    }
-  };
-
+  const goAtlas = (et) => { if (permissions?.atlas) { if (et) setEnergy(et); setPage('atlas'); } };
   const gs = apiStats.ges;
   const rs = apiStats.res;
 
-  const GES_CRITERIA = [
-    {id:'solar',  k:'Solar Radyasyon', c:'#F59E0B'},
-    {id:'arazi',  k:'Arazi Kullanımı', c:'#60A5FA'},
-    {id:'egim',   k:'Eğim & Bakı',     c:'#10B981'},
-    {id:'baki',   k:'Bakı',            c:'#A78BFA'},
-    {id:'enerji', k:'ENH Yakınlığı',   c:'#FB923C'},
-    {id:'yerlesim',k:'Yerleşim',       c:'#F472B6'},
-    {id:'yol',    k:'Yola Yakınlık',   c:'#34D399'},
-    {id:'fay',    k:'Fay Uzaklığı',    c:'#94A3B8'},
-    {id:'akarsu', k:'Akarsu',          c:'#67E8F9'},
-  ];
-  const RES_CRITERIA = [
-    {id:'ruzgar',    k:'Rüzgâr Hızı',    c:'#38BDF8'},
-    {id:'arazi',     k:'Arazi Kullanımı', c:'#60A5FA'},
-    {id:'yukseklik', k:'Yükseklik',       c:'#FDE68A'},
-    {id:'yerlesim',  k:'Yerleşim',        c:'#F472B6'},
-    {id:'enerji',    k:'ENH Yakınlığı',   c:'#FB923C'},
-    {id:'egim',      k:'Eğim',            c:'#10B981'},
-    {id:'yol',       k:'Yola Yakınlık',   c:'#34D399'},
-    {id:'fay',       k:'Fay Uzaklığı',    c:'#94A3B8'},
-    {id:'akarsu',    k:'Akarsu',          c:'#67E8F9'},
-  ];
-
-  // ── Tema bazlı hero overlay renkleri ──
-  const heroOverlayLeft = theme === 'light'
-    ? 'linear-gradient(100deg, rgba(248,250,252,0.65) 0%, rgba(248,250,252,0.45) 38%, rgba(248,250,252,0.10) 65%, rgba(248,250,252,0.0) 100%)'
-    : 'linear-gradient(100deg, rgba(4,8,18,0.78) 0%, rgba(4,8,18,0.62) 38%, rgba(4,8,18,0.28) 65%, rgba(4,8,18,0.0) 100%)';
-  const heroOverlayBottom = theme === 'light'
-    ? 'linear-gradient(180deg, transparent 50%, rgba(248,250,252,0.6) 100%)'
-    : 'linear-gradient(180deg, transparent 50%, rgba(4,8,18,0.6) 100%)';
-  const heroTextColor = theme === 'light' ? '#0f172a' : undefined;
-  const heroSubColor  = theme === 'light' ? '#334155' : undefined;
-
-  if (!token) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!token) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="atlas-root">
-      {/* ── TOPBAR ── */}
+
+      {/* ── TOPBAR ─────────────────────────────────────────── */}
       <header className="topbar">
         <div className="topbar-inner">
+
+          {/* Marka */}
           <div className="brand">
             <div className="brand-mark">
               <svg viewBox="0 0 44 44" fill="none">
@@ -387,54 +312,49 @@ export default function App() {
             </div>
             <div className="divider-v"/>
             <div className="dept-text">
-              <strong>İklim Değişikliği ve</strong><br/>
-              Temiz Enerji Şube Müdürlüğü
+              <strong>İklim Değişikliği ve</strong><br/>Temiz Enerji Şube Müdürlüğü
             </div>
           </div>
 
+          {/* Nav */}
           <nav className="nav">
             {[
-              ['home', 'Ana Sayfa', true],
-              ['atlas', 'Atlas', permissions?.atlas],
-              ['raporlar', 'Raporlar', permissions?.raporlar],
+              ['home',       'Ana Sayfa',  true],
+              ['atlas',      'Atlas',      permissions?.atlas],
+              ['raporlar',   'Raporlar',   permissions?.raporlar],
               ['santraller', 'Santraller', permissions?.santraller],
-              ['admin', 'Admin Paneli', user?.rol === 'admin']
             ]
-              .filter(([_, __, allowed]) => allowed)
+              .filter(([,,allowed]) => allowed)
               .map(([id, label]) => (
-                <div key={id}
-                  className={`nav-link${page===id?' active':''}`}
-                  onClick={() => navigateTo(id)}>
+                <div key={id} className={`nav-link${page===id?' active':''}`} onClick={() => navigateTo(id)}>
                   {label}
                 </div>
               ))}
           </nav>
 
+          {/* Sağ kontroller */}
           <div className="controls">
             {user && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginRight:8 }}>
+                <span style={{ fontSize:12, color:'var(--text-2)', fontWeight:600 }}>
                   {user.ad_soyad || user.kullanici_adi}
                 </span>
                 <span style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  background: user.rol === 'admin' ? '#F59E0B20' : user.rol === 'mudur' ? '#A78BFA20' : '#38BDF820',
-                  color: user.rol === 'admin' ? '#F59E0B' : user.rol === 'mudur' ? '#A78BFA' : '#38BDF8',
-                  border: `1px solid ${user.rol === 'admin' ? '#F59E0B' : user.rol === 'mudur' ? '#A78BFA' : '#38BDF8'}30`,
-                  textTransform: 'uppercase'
+                  fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, textTransform:'uppercase',
+                  background: user.rol==='admin'?'#F59E0B20':user.rol==='mudur'?'#A78BFA20':'#38BDF820',
+                  color:      user.rol==='admin'?'#F59E0B'  :user.rol==='mudur'?'#A78BFA'  :'#38BDF8',
+                  border:    `1px solid ${user.rol==='admin'?'#F59E0B':user.rol==='mudur'?'#A78BFA':'#38BDF8'}30`,
                 }}>
-                  {user.rol === 'admin' ? 'Admin' : user.rol === 'mudur' ? 'Müdür' : 'Analist'}
+                  {user.rol==='admin'?'Admin':user.rol==='mudur'?'Müdür':'Analist'}
                 </span>
               </div>
             )}
 
+            {/* Tema */}
             <div className="theme-pill">
               {['dark','light'].map(t => (
                 <button key={t} className={`theme-opt${theme===t?' active':''}`} onClick={() => setTheme(t)}>
-                  {t === 'dark'
+                  {t==='dark'
                     ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Koyu</>
                     : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"/></svg> Açık</>
                   }
@@ -442,99 +362,102 @@ export default function App() {
               ))}
             </div>
 
-            {permissions?.atlas && (
-              <button className="cta-btn" onClick={() => navigateTo('atlas')}>
-                <MapIcon/> Atlası Aç
+            {/* Ayarlar — sadece Çıkış Yap; admin ise gizli erişim */}
+            <div style={{ position:'relative', display:'inline-block' }}>
+              <button
+                onClick={() => setShowSettingsMenu(p => !p)}
+                style={{
+                  padding:'8px 14px', borderRadius:9, border:'1px solid var(--border)',
+                  background:'var(--surface-2)', color:'var(--text-2)',
+                  fontFamily:'inherit', fontSize:12, fontWeight:700,
+                  cursor:'pointer', display:'flex', alignItems:'center', gap:6,
+                  transition:'all 0.2s', marginLeft:4,
+                }}>
+                <span>Ayarlar</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{ transition:'transform 0.2s', transform:showSettingsMenu?'rotate(180deg)':'none' }}>
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
               </button>
-            )}
 
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 9,
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                background: 'rgba(239, 68, 68, 0.08)',
-                color: '#EF4444',
-                fontFamily: 'inherit',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                marginLeft: 4,
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
-              }}
-            >
-              Çıkış Yap
-            </button>
+              {showSettingsMenu && (
+                <>
+                  <div onClick={() => setShowSettingsMenu(false)}
+                    style={{ position:'fixed', inset:0, zIndex:998 }}/>
+                  <div style={{
+                    position:'absolute', right:0, top:'100%', marginTop:6,
+                    width:180, background:'var(--card)', border:'1px solid var(--border)',
+                    borderRadius:10, boxShadow:'0 10px 25px rgba(0,0,0,0.3)',
+                    padding:6, zIndex:999, display:'flex', flexDirection:'column', gap:2,
+                  }}>
+                    {/* Admin erişimi — sadece admin ve görünmez etiket */}
+                    {user?.rol === 'admin' && (
+                      <button
+                        onClick={() => { navigateTo('admin'); setShowSettingsMenu(false); }}
+                        style={{
+                          width:'100%', textAlign:'left', padding:'8px 12px',
+                          background: page==='admin'?'var(--brand-soft)':'transparent',
+                          border:'none', borderRadius:7,
+                          color: page==='admin'?'var(--brand)':'var(--muted)',
+                          fontFamily:'inherit', fontSize:12, fontWeight:600, cursor:'pointer',
+                          display:'flex', alignItems:'center', gap:8,
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background='var(--surface-2)'}
+                        onMouseLeave={e => e.currentTarget.style.background=page==='admin'?'var(--brand-soft)':'transparent'}
+                      >
+                        <span style={{fontSize:13}}>⚙️</span>
+                        <span>Sistem Yönetimi</span>
+                      </button>
+                    )}
+
+                    {/* Çıkış */}
+                    <button
+                      onClick={() => { handleLogout(); setShowSettingsMenu(false); }}
+                      style={{
+                        width:'100%', textAlign:'left', padding:'8px 12px',
+                        background:'transparent', border:'none', borderRadius:7,
+                        color:'#EF4444', fontFamily:'inherit', fontSize:12.5,
+                        fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:8,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background='rgba(239,68,68,0.08)'}
+                      onMouseLeave={e => e.currentTarget.style.background='transparent'}
+                    >
+                      <span style={{fontSize:13}}>🚪</span>
+                      <span>Çıkış Yap</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* ── HOME ── */}
+      {/* ── HOME ───────────────────────────────────────────── */}
       {page === 'home' && (
         <div className="page-content" style={{flex:1,overflowY:'auto'}}>
+
+          {/* Hero */}
           <section style={{position:'relative',minHeight:'calc(100vh - var(--nav-h))',overflow:'hidden',display:'flex',alignItems:'center'}}>
-            {/* Arka plan görsel */}
-            <div style={{
-              position:'absolute',inset:0,
-              backgroundImage:'url(/izmir_hero.png)',
-              backgroundSize:'cover',
-              backgroundPosition:'center 22%',
-              backgroundRepeat:'no-repeat',
-            }}/>
-            {/* ── FİX 1: Tema bazlı sol overlay ── */}
-            <div style={{
-              position:'absolute',inset:0,
-              background: heroOverlayLeft,
-            }}/>
-            {/* ── FİX 2: Tema bazlı alt overlay ── */}
-            <div style={{
-              position:'absolute',inset:0,
-              background: heroOverlayBottom,
-            }}/>
-            {/* ── FİX 3: Hero içerik — tema bazlı metin rengi ── */}
-            <div style={{
-              position:'absolute',top:0,left:0,right:0,zIndex:2,
-              maxWidth:1280,margin:'0 auto',padding:'80px 56px 0',
-              width:'100%',
-              color: heroTextColor,
-            }}>
+            <div style={{position:'absolute',inset:0,backgroundImage:'url(/izmir_hero.png)',backgroundSize:'cover',backgroundPosition:'center 22%',backgroundRepeat:'no-repeat'}}/>
+            <div style={{position:'absolute',inset:0,background:heroOverlayLeft}}/>
+            <div style={{position:'absolute',inset:0,background:heroOverlayBottom}}/>
+            <div style={{position:'absolute',top:0,left:0,right:0,zIndex:2,maxWidth:1280,margin:'0 auto',padding:'80px 56px 0',width:'100%',color:heroTextColor}}>
               <div style={{maxWidth:620}}>
-                <div className="hero-eyebrow" style={{marginBottom:20, color: theme === 'light' ? 'var(--brand)' : undefined}}>
-                  <span className="dot"/>
-                  İklim Değişikliği · Temiz Enerji · DEÜ YBS 2026
+                <div className="hero-eyebrow" style={{marginBottom:20,color:theme==='light'?'var(--brand)':undefined}}>
+                  <span className="dot"/> İklim Değişikliği · Temiz Enerji · DEÜ YBS 2026
                 </div>
-                <h1 className="hero-title" style={{fontSize:'clamp(2.2rem,3.8vw,3.4rem)',marginBottom:20, color: heroTextColor}}>
+                <h1 className="hero-title" style={{fontSize:'clamp(2.2rem,3.8vw,3.4rem)',marginBottom:20,color:heroTextColor}}>
                   İzmir'in <em>yenilenebilir<br/>enerji potansiyeli</em><br/>tek harita üzerinde
                 </h1>
-                <p className="hero-sub" style={{fontSize:16,maxWidth:500,marginBottom:32, color: heroSubColor}}>
+                <p className="hero-sub" style={{fontSize:16,maxWidth:500,marginBottom:32,color:heroSubColor}}>
                   GES ve RES uygunluk analizleri; AHP çok kriterli karar destek ve PostGIS tabanlı mekânsal veri tabanı üzerinden tüm ilçeler için sunulmaktadır.
                 </p>
-                <div className="hero-actions" style={{marginBottom:36}}>
-                  {permissions?.atlas && (
-                    <button className="btn-primary" onClick={() => navigateTo('atlas')} style={{padding:'12px 24px',fontSize:14}}>
-                      Atlası İncele <ArrowIcon/>
-                    </button>
-                  )}
-                </div>
               </div>
             </div>
-            {/* Sağ alt — teknik badge'ler */}
             <div style={{position:'absolute',bottom:20,right:28,zIndex:2,display:'flex',gap:6}}>
               {['AHP','PostGIS','100m','EPSG:32635'].map(t=>(
-                <span key={t} style={{
-                  fontSize:9.5,fontWeight:700,
-                  background: theme === 'light' ? 'rgba(248,250,252,0.82)' : 'rgba(6,10,20,0.75)',
-                  backdropFilter:'blur(8px)',
-                  color:'var(--brand)',padding:'5px 10px',borderRadius:999,
-                  border:'1px solid rgba(14,165,164,0.25)',letterSpacing:'0.04em',
-                }}>{t}</span>
+                <span key={t} style={{fontSize:9.5,fontWeight:700,background:theme==='light'?'rgba(248,250,252,0.82)':'rgba(6,10,20,0.75)',backdropFilter:'blur(8px)',color:'var(--brand)',padding:'5px 10px',borderRadius:999,border:'1px solid rgba(14,165,164,0.25)',letterSpacing:'0.04em'}}>{t}</span>
               ))}
             </div>
           </section>
@@ -543,28 +466,16 @@ export default function App() {
           <div className="ribbon">
             <div className="ribbon-grid">
               <div className="ribbon-card" onClick={() => goAtlas('GES')}>
-                <div className="ic" style={{background:'rgba(245,158,11,0.14)',color:'var(--solar)'}}>
-                  <SunIcon/>
-                </div>
+                <div className="ic" style={{background:'rgba(245,158,11,0.14)',color:'var(--solar)'}}><SunIcon/></div>
                 <div className="label">GES Potansiyeli</div>
-                <div className="val">
-                  {gs ? (gs.toplam_mw/1000).toFixed(1) : '—'}<small>GW</small>
-                </div>
-                <div className="delta" style={{color:'var(--solar)'}}>
-                  ↑ {gs ? gs.toplam_uygun_ha.toLocaleString('tr') : '—'} ha uygun alan
-                </div>
+                <div className="val">{gs?(gs.toplam_mw/1000).toFixed(1):'—'}<small>GW</small></div>
+                <div className="delta" style={{color:'var(--solar)'}}>↑ {gs?gs.toplam_uygun_ha.toLocaleString('tr'):'—'} ha uygun alan</div>
               </div>
               <div className="ribbon-card" onClick={() => goAtlas('RES')}>
-                <div className="ic" style={{background:'rgba(56,189,248,0.14)',color:'var(--wind)'}}>
-                  <WindIcon/>
-                </div>
+                <div className="ic" style={{background:'rgba(56,189,248,0.14)',color:'var(--wind)'}}><WindIcon/></div>
                 <div className="label">RES Potansiyeli</div>
-                <div className="val">
-                  {rs ? (rs.toplam_mw/1000).toFixed(1) : '—'}<small>GW</small>
-                </div>
-                <div className="delta" style={{color:'var(--wind)'}}>
-                  ↑ {rs ? rs.toplam_uygun_ha.toLocaleString('tr') : '—'} ha uygun alan
-                </div>
+                <div className="val">{rs?(rs.toplam_mw/1000).toFixed(1):'—'}<small>GW</small></div>
+                <div className="delta" style={{color:'var(--wind)'}}>↑ {rs?rs.toplam_uygun_ha.toLocaleString('tr'):'—'} ha uygun alan</div>
               </div>
               <div className="ribbon-card">
                 <div className="ic" style={{background:'var(--brand-soft)',color:'var(--brand)'}}>
@@ -585,7 +496,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Categories */}
+          {/* Kategoriler */}
           <section className="section">
             <div className="section-head">
               <div>
@@ -599,43 +510,27 @@ export default function App() {
             </div>
             <div className="cats">
               <div className="cat" style={{'--cat-color':'var(--solar)'}} onClick={() => goAtlas('GES')}>
-                <div className="cat-arrow">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg>
-                </div>
+                <div className="cat-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg></div>
                 <GESIllustration/>
                 <div className="cat-icon" style={{background:'rgba(245,158,11,0.14)',color:'var(--solar)'}}><SolarPanelIcon/></div>
                 <div className="cat-tag">Güneş Enerjisi</div>
                 <div className="cat-name">GES Uygunluk Analizi</div>
                 <div className="cat-desc">Solar radyasyon, eğim, bakı ve çevresel mesafe kriterleriyle güneş enerjisi kurulum alanları.</div>
                 <div className="cat-stats">
-                  <div className="cat-stat">
-                    <div className="v">{gs ? gs.toplam_uygun_ha.toLocaleString('tr') : '…'} ha</div>
-                    <div className="l">Uygun Alan</div>
-                  </div>
-                  <div className="cat-stat">
-                    <div className="v">{gs ? gs.ort_skor : '…'}/5</div>
-                    <div className="l">Ort. Skor</div>
-                  </div>
+                  <div className="cat-stat"><div className="v">{gs?gs.toplam_uygun_ha.toLocaleString('tr'):'…'} ha</div><div className="l">Uygun Alan</div></div>
+                  <div className="cat-stat"><div className="v">{gs?gs.ort_skor:'…'}/5</div><div className="l">Ort. Skor</div></div>
                 </div>
               </div>
               <div className="cat" style={{'--cat-color':'var(--wind)'}} onClick={() => goAtlas('RES')}>
-                <div className="cat-arrow">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg>
-                </div>
+                <div className="cat-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg></div>
                 <RESIllustration/>
                 <div className="cat-icon" style={{background:'rgba(56,189,248,0.14)',color:'var(--wind)'}}><TurbineIcon/></div>
                 <div className="cat-tag">Rüzgâr Enerjisi</div>
                 <div className="cat-name">RES Uygunluk Analizi</div>
                 <div className="cat-desc">Rüzgâr hızı (100m), yükseklik ve açık arazi kriterleriyle rüzgâr enerjisi kurulum alanları.</div>
                 <div className="cat-stats">
-                  <div className="cat-stat">
-                    <div className="v">{rs ? rs.toplam_uygun_ha.toLocaleString('tr') : '…'} ha</div>
-                    <div className="l">Uygun Alan</div>
-                  </div>
-                  <div className="cat-stat">
-                    <div className="v">{rs ? rs.ort_skor : '…'}/5</div>
-                    <div className="l">Ort. Skor</div>
-                  </div>
+                  <div className="cat-stat"><div className="v">{rs?rs.toplam_uygun_ha.toLocaleString('tr'):'…'} ha</div><div className="l">Uygun Alan</div></div>
+                  <div className="cat-stat"><div className="v">{rs?rs.ort_skor:'…'}/5</div><div className="l">Ort. Skor</div></div>
                 </div>
               </div>
               <div className="cat" style={{'--cat-color':'var(--brand)'}}>
@@ -643,30 +538,20 @@ export default function App() {
                   <ellipse cx="140" cy="152" rx="140" ry="16" fill="currentColor" opacity="0.06"/>
                   <rect x="100" y="8" width="80" height="28" rx="6" fill="none" stroke="var(--brand,#0EA5A4)" strokeWidth="1.2" opacity="0.7"/>
                   <text x="140" y="27" textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--brand,#0EA5A4)" fontFamily="Manrope,sans-serif">Yer Seçimi</text>
-                  {[
-                    {x:20, label:'Solar', color:'#F59E0B'},
-                    {x:78, label:'Eğim', color:'#10B981'},
-                    {x:136, label:'Yerleşim', color:'#F472B6'},
-                    {x:194, label:'ENH', color:'#FB923C'},
-                  ].map((item,i) => (
+                  {[{x:20,label:'Solar',color:'#F59E0B'},{x:78,label:'Eğim',color:'#10B981'},{x:136,label:'Yerleşim',color:'#F472B6'},{x:194,label:'ENH',color:'#FB923C'}].map((item,i)=>(
                     <g key={i}>
                       <line x1="140" y1="36" x2={item.x+30} y2="68" stroke={item.color} strokeWidth="0.8" opacity="0.35"/>
-                      <rect x={item.x} y="68" width="60" height="24" rx="5" fill={item.color} opacity="0.15" stroke={item.color} strokeWidth="1" opacity2="0.5"/>
+                      <rect x={item.x} y="68" width="60" height="24" rx="5" fill={item.color} opacity="0.15" stroke={item.color} strokeWidth="1"/>
                       <text x={item.x+30} y="84" textAnchor="middle" fontSize="10" fontWeight="500" fill={item.color} fontFamily="Manrope,sans-serif">{item.label}</text>
                     </g>
                   ))}
-                  {[30, 100, 170, 230].map((x,i) => (
+                  {[30,100,170,230].map((x,i)=>(
                     <g key={i}>
                       <rect x={x} y="112" width="42" height="20" rx="4" fill="none" stroke="var(--brand,#0EA5A4)" strokeWidth="0.8" opacity="0.4"/>
                       <text x={x+21} y="126" textAnchor="middle" fontSize="9" fill="var(--brand,#0EA5A4)" fontFamily="Manrope,sans-serif" opacity="0.7">Alan {i+1}</text>
                     </g>
                   ))}
-                  {[
-                    {x:20+30, w:0.32, color:'#F59E0B'},
-                    {x:78+30, w:0.25, color:'#10B981'},
-                    {x:136+30, w:0.20, color:'#F472B6'},
-                    {x:194+30, w:0.15, color:'#FB923C'},
-                  ].map((item,i) => (
+                  {[{x:50,w:0.32,color:'#F59E0B'},{x:108,w:0.25,color:'#10B981'},{x:166,w:0.20,color:'#F472B6'},{x:224,w:0.15,color:'#FB923C'}].map((item,i)=>(
                     <rect key={i} x={item.x-20} y="96" width={item.w*60} height="4" rx="2" fill={item.color} opacity="0.7"/>
                   ))}
                 </svg>
@@ -696,86 +581,62 @@ export default function App() {
                       <circle cx="22" cy="22" r="3" fill="var(--accent)"/>
                     </svg>
                   </div>
-                  <div>
-                    <div className="brand-name">YE·ATLAS</div>
-                    <div className="brand-sub">Yenilenebilir Enerji Atlası</div>
-                  </div>
+                  <div><div className="brand-name">YE·ATLAS</div><div className="brand-sub">Yenilenebilir Enerji Atlası</div></div>
                 </div>
                 <p className="footer-desc">İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü — DEÜ YBS Capstone Projesi 2026.</p>
                 <div className="footer-copy">© 2026 İzmir Büyükşehir Belediyesi</div>
               </div>
-
-              {/* ── FİX 4: Footer — tüm linkler navigasyon ile ── */}
               <div className="footer-col">
                 <h4>Analizler</h4>
-                {permissions?.atlas && (
-                  <>
-                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('GES')}>GES Analizi</span>
-                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('RES')}>RES Analizi</span>
-                    <span className="footer-link" style={{cursor:'pointer'}} onClick={() => navigateTo('atlas')}>Birleşik Atlas</span>
-                  </>
-                )}
+                {permissions?.atlas && (<>
+                  <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('GES')}>GES Analizi</span>
+                  <span className="footer-link" style={{cursor:'pointer'}} onClick={() => goAtlas('RES')}>RES Analizi</span>
+                  <span className="footer-link" style={{cursor:'pointer'}} onClick={() => navigateTo('atlas')}>Birleşik Atlas</span>
+                </>)}
                 {permissions?.raporlar && (
                   <span className="footer-link" style={{cursor:'pointer'}} onClick={() => navigateTo('raporlar')}>İlçe Karşılaştırma</span>
                 )}
               </div>
               <div className="footer-col">
                 <h4>Teknik</h4>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('https://qgis.org', '_blank')}>QGIS / PostGIS</span>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('https://www.sciencedirect.com/topics/engineering/analytic-hierarchy-process', '_blank')}>AHP Metodoloji</span>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('http://localhost:8003/docs', '_blank')}>API Dokümantasyonu</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('https://qgis.org','_blank')}>QGIS / PostGIS</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('https://www.sciencedirect.com/topics/engineering/analytic-hierarchy-process','_blank')}>AHP Metodoloji</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('http://localhost:8003/docs','_blank')}>API Dokümantasyonu</span>
               </div>
               <div className="footer-col">
                 <h4>Veri</h4>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('https://globalsolaratlas.info', '_blank')}>Global Solar Atlas</span>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('https://globalwindatlas.info', '_blank')}>Global Wind Atlas</span>
-                <span className="footer-link" style={{cursor:'pointer'}}
-                  onClick={() => window.open('https://www.openstreetmap.org', '_blank')}>OSM / MTA / SRTM</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('https://globalsolaratlas.info','_blank')}>Global Solar Atlas</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('https://globalwindatlas.info','_blank')}>Global Wind Atlas</span>
+                <span className="footer-link" style={{cursor:'pointer'}} onClick={() => window.open('https://www.openstreetmap.org','_blank')}>OSM / MTA / SRTM</span>
               </div>
             </div>
           </footer>
         </div>
       )}
 
-      {/* ── ATLAS ── */}
+      {/* ── ATLAS ──────────────────────────────────────────── */}
       {(page === 'atlas' || page === 'ges' || page === 'res') && (
         <div style={{display:'flex',flexDirection:'column',minHeight:'calc(100vh - var(--nav-h))'}}>
           <div style={{display:'grid',gridTemplateColumns:'272px 1fr 272px',height:'calc(100vh - var(--nav-h))'}}>
 
-            {/* ── SOL PANEL ── */}
+            {/* Sol panel */}
             <aside className="analysis-sidebar" style={{borderRight:'1px solid var(--border)',overflowY:'auto'}}>
               <div className="sidebar-section">
                 <div className="energy-toggle">
-                  <button
-                    className={`energy-btn${energyType==='GES'?' active':''}`}
-                    onClick={() => setEnergy('GES')}
-                    style={energyType==='GES'?{borderColor:'var(--solar)',background:'rgba(245,158,11,0.1)'}:{}}
-                  >
-                    <span className="icon" style={{color: energyType==='GES'?'var(--solar)':'var(--text-2)'}}>
-                      <SolarPanelIcon size={28}/>
-                    </span>
-                    <span className="label">GES</span>
-                    <span className="sub">Güneş</span>
+                  <button className={`energy-btn${energyType==='GES'?' active':''}`} onClick={() => setEnergy('GES')}
+                    style={energyType==='GES'?{borderColor:'var(--solar)',background:'rgba(245,158,11,0.1)'}:{}}>
+                    <span className="icon" style={{color:energyType==='GES'?'var(--solar)':'var(--text-2)'}}><SolarPanelIcon size={28}/></span>
+                    <span className="label">GES</span><span className="sub">Güneş</span>
                   </button>
-                  <button
-                    className={`energy-btn${energyType==='RES'?' active':''}`}
-                    onClick={() => setEnergy('RES')}
-                    style={energyType==='RES'?{borderColor:'var(--wind)',background:'rgba(56,189,248,0.1)'}:{}}
-                  >
-                    <span className="icon" style={{color: energyType==='RES'?'var(--wind)':'var(--text-2)'}}>
-                      <TurbineIcon size={28}/>
-                    </span>
-                    <span className="label">RES</span>
-                    <span className="sub">Rüzgâr</span>
+                  <button className={`energy-btn${energyType==='RES'?' active':''}`} onClick={() => setEnergy('RES')}
+                    style={energyType==='RES'?{borderColor:'var(--wind)',background:'rgba(56,189,248,0.1)'}:{}}>
+                    <span className="icon" style={{color:energyType==='RES'?'var(--wind)':'var(--text-2)'}}><TurbineIcon size={28}/></span>
+                    <span className="label">RES</span><span className="sub">Rüzgâr</span>
                   </button>
                 </div>
               </div>
 
+              {/* AHP Ağırlıkları — READ ONLY */}
               <div className="sidebar-section">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                   <div className="sidebar-label">AHP Ağırlıkları</div>
@@ -831,6 +692,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Uygunluk Skalası */}
               <div className="sidebar-section">
                 <div className="sidebar-label">Uygunluk Skalası</div>
                 {[
@@ -848,26 +710,27 @@ export default function App() {
               </div>
             </aside>
 
-            {/* ── ORTA: Harita ── */}
+            {/* Harita */}
             <div style={{position:'relative',background:'var(--bg-2)',overflow:'hidden'}}>
               <div style={{
                 position:'absolute',top:0,left:0,right:0,zIndex:10,
                 background:'color-mix(in oklab, var(--surface) 90%, transparent)',
-                backdropFilter:'blur(10px)',
-                borderBottom:'1px solid var(--border)',
-                padding:'8px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',
-                fontSize:11,color:'var(--muted)',fontFamily:"'Manrope',sans-serif",
+                backdropFilter:'blur(10px)', borderBottom:'1px solid var(--border)',
+                padding:'8px 16px', display:'flex', justifyContent:'space-between', alignItems:'center',
+                fontSize:11, color:'var(--muted)', fontFamily:"'Manrope',sans-serif",
               }}>
                 <span style={{fontWeight:600,color:'var(--text-2)'}}>Uygunluk Atlası — İzmir</span>
                 <span>EPSG:32635 · 100m · AHP</span>
               </div>
+
               <MapView
                 energyType={energyType}
                 minScore={minScore}
+                showTileLayer={true}
                 onStatsUpdate={handleStatsUpdate}
                 onTerrainStats={() => {}}
                 cityFocus={cityFocus}
-                show3D={show3D}
+                show3D={true}
                 showSuitability={true}
                 showSantral={false}
                 flyToIlce={flyToIlce}
@@ -876,15 +739,15 @@ export default function App() {
                 onIlceClick={(ilce) => {
                   setSelectedIlce(ilce);
                   setFlyToIlce(null);
-                  setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80);
+                  setTimeout(() => setFlyToIlce(ilce+'_'+Date.now()), 80);
                 }}
               />
+
               <div style={{
                 position:'absolute',bottom:16,left:16,zIndex:10,
                 background:'color-mix(in oklab, var(--surface) 92%, transparent)',
-                backdropFilter:'blur(8px)',
-                border:'1px solid var(--border)',borderRadius:10,
-                padding:'10px 14px',fontFamily:"'Manrope',sans-serif",
+                backdropFilter:'blur(8px)', border:'1px solid var(--border)',
+                borderRadius:10, padding:'10px 14px', fontFamily:"'Manrope',sans-serif",
               }}>
                 <div style={{fontSize:10,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',color:'var(--muted)',marginBottom:7}}>
                   UYGUNLUK SKORU · {energyType}
@@ -895,58 +758,32 @@ export default function App() {
                   ))}
                 </div>
                 <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'var(--dim)'}}>
-                  {['Düşük','','Orta','','Yüksek'].map((n,i) => <span key={i}>{n}</span>)}
+                  <span>Sınıf 4</span><span>Sınıf 5</span>
                 </div>
               </div>
             </div>
 
-            {/* ── SAĞ PANEL ── */}
+            {/* Sağ panel */}
             <aside className="analysis-sidebar" style={{borderLeft:'1px solid var(--border)',overflowY:'auto'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                 <div style={{fontSize:13,fontWeight:800,color:'var(--text)'}}>Sonuçlar</div>
                 <div style={{fontSize:11,fontWeight:600,color:'var(--brand)'}}>İZMİR</div>
               </div>
 
-              <div style={{
-                background:'var(--surface-2)',
-                border:'1px solid var(--border)',
-                borderTop:`3px solid ${energyType==='GES'?'var(--solar)':'var(--wind)'}`,
-                borderRadius:12,padding:14,marginBottom:14,
-              }}>
+              <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderTop:`3px solid ${energyType==='GES'?'var(--solar)':'var(--wind)'}`,borderRadius:12,padding:14,marginBottom:14}}>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
                   <div style={{color:energyType==='GES'?'var(--solar)':'var(--wind)'}}>
                     {energyType==='GES'?<SolarPanelIcon size={18}/>:<TurbineIcon size={18}/>}
                   </div>
                   <div style={{fontSize:12,fontWeight:700,color:'var(--text)'}}>İzmir Geneli</div>
-                  <div style={{
-                    fontSize:9.5,fontWeight:600,color:energyType==='GES'?'var(--solar)':'var(--wind)',
-                    padding:'2px 7px',borderRadius:999,
-                    background:energyType==='GES'?'rgba(245,158,11,0.12)':'rgba(56,189,248,0.12)',
-                    marginLeft:'auto',
-                  }}>{energyType}</div>
+                  <div style={{fontSize:9.5,fontWeight:600,color:energyType==='GES'?'var(--solar)':'var(--wind)',padding:'2px 7px',borderRadius:999,background:energyType==='GES'?'rgba(245,158,11,0.12)':'rgba(56,189,248,0.12)',marginLeft:'auto'}}>{energyType}</div>
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                   {[
-                    {
-                      val: (((energyType==='GES'?gs?.toplam_uygun_ha:rs?.toplam_uygun_ha)||0)/100).toFixed(0),
-                      unit: 'km²',
-                      label: energyType==='GES'?'Güneşe Uygun Arazi':'Rüzgâra Uygun Arazi',
-                    },
-                    {
-                      val: (((energyType==='GES'?gs?.toplam_mw:rs?.toplam_mw)||0)/1000).toFixed(1),
-                      unit: 'GW',
-                      label: 'Tahmini Kurulu Güç',
-                    },
-                    {
-                      val: (energyType==='GES'?gs?.ort_skor:rs?.ort_skor)||'—',
-                      unit: '/5',
-                      label: 'AHP Ort. Uygunluk Skoru',
-                    },
-                    {
-                      val: '28',
-                      unit: 'ilçe',
-                      label: 'Analiz Edilen İlçe',
-                    },
+                    { val:(((energyType==='GES'?gs?.toplam_uygun_ha:rs?.toplam_uygun_ha)||0)/100).toFixed(0), unit:'km²', label:energyType==='GES'?'Güneşe Uygun Arazi':'Rüzgâra Uygun Arazi' },
+                    { val:(((energyType==='GES'?gs?.toplam_mw:rs?.toplam_mw)||0)/1000).toFixed(1), unit:'GW', label:'Tahmini Kurulu Güç' },
+                    { val:(energyType==='GES'?gs?.ort_skor:rs?.ort_skor)||'—', unit:'/5', label:'AHP Ort. Uygunluk Skoru' },
+                    { val:'28', unit:'ilçe', label:'Analiz Edilen İlçe' },
                   ].map(({val,unit,label},i) => (
                     <div key={i} style={{background:'rgba(0,0,0,0.18)',borderRadius:9,padding:'10px 12px'}}>
                       <div style={{display:'flex',alignItems:'baseline',gap:3,marginBottom:4}}>
@@ -959,56 +796,36 @@ export default function App() {
                 </div>
               </div>
 
+              {/* İlçeye Git */}
               <div className="sidebar-section">
                 <div className="sidebar-label">İlçeye Git</div>
                 <div style={{display:'flex',gap:6}}>
                   <select value={selectedIlce} onChange={e=>{
                     const v=e.target.value; setSelectedIlce(v);
                     if(v){ setFlyToIlce(null); setTimeout(()=>setFlyToIlce(v+'_'+Date.now()),80); }
-                  }} style={{
-                    flex:1,padding:'8px 10px',borderRadius:9,
-                    border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',
-                    fontFamily:'inherit',fontSize:12.5,cursor:'pointer',
-                  }}>
+                  }} style={{flex:1,padding:'8px 10px',borderRadius:9,border:'1px solid var(--border)',background:'var(--card)',color:'var(--text)',fontFamily:'inherit',fontSize:12.5,cursor:'pointer'}}>
                     <option value="">— İlçe seç —</option>
                     {ilceler.map(n=><option key={n} value={n}>{n}</option>)}
                   </select>
-                  <button onClick={()=>{ if(selectedIlce){ setFlyToIlce(null); setTimeout(()=>setFlyToIlce(selectedIlce+'_'+Date.now()),100); }}} style={{
-                    padding:'8px 12px',borderRadius:9,
-                    background:'var(--brand-soft)',border:'1px solid rgba(14,165,164,0.3)',
-                    color:'var(--brand)',fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',
-                  }}>↗</button>
+                  <button onClick={()=>{ if(selectedIlce){ setFlyToIlce(null); setTimeout(()=>setFlyToIlce(selectedIlce+'_'+Date.now()),100); }}} style={{padding:'8px 12px',borderRadius:9,background:'var(--brand-soft)',border:'1px solid rgba(14,165,164,0.3)',color:'var(--brand)',fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer'}}>↗</button>
                 </div>
                 {selectedIlce && (
-                  <button onClick={()=>{setSelectedIlce('');setIlceDetay(null);setFlyToIlce(null);}} style={{
-                    marginTop:5,width:'100%',padding:'5px',borderRadius:7,
-                    border:'1px solid var(--border)',background:'transparent',
-                    color:'var(--muted)',fontFamily:'inherit',fontSize:11,cursor:'pointer',
-                  }}>✕ Seçimi temizle</button>
+                  <button onClick={()=>{setSelectedIlce('');setIlceDetay(null);setFlyToIlce(null);}} style={{marginTop:5,width:'100%',padding:'5px',borderRadius:7,border:'1px solid var(--border)',background:'transparent',color:'var(--muted)',fontFamily:'inherit',fontSize:11,cursor:'pointer'}}>✕ Seçimi temizle</button>
                 )}
               </div>
 
+              {/* İlçe Detay */}
               {ilceLoading && (
                 <div style={{textAlign:'center',padding:'16px',color:'var(--muted)',fontSize:12}}>
-                  <div style={{width:16,height:16,border:'2px solid var(--surface-2)',borderTopColor:'var(--brand)',
-                    borderRadius:'50%',animation:'spin .8s linear infinite',margin:'0 auto 8px'}}/>
+                  <div style={{width:16,height:16,border:'2px solid var(--surface-2)',borderTopColor:'var(--brand)',borderRadius:'50%',animation:'spin .8s linear infinite',margin:'0 auto 8px'}}/>
                   Yükleniyor…
                 </div>
               )}
               {ilceDetay && !ilceLoading && (() => {
-                const d = ilceDetay;
-                const skor = d.skor_ort || 0;
-                const renk = skor>=4?'#14803C':skor>=3?'#4AA635':skor>=2?'#D97706':'#B91C1C';
-                const pct = (skor/5)*100;
+                const d=ilceDetay, skor=d.skor_ort||0;
+                const renk=skor>=4?'#14803C':skor>=3?'#4AA635':skor>=2?'#D97706':'#B91C1C';
                 return (
-                  <div style={{
-                    background:'var(--surface-2)',
-                    border:`1px solid ${renk}40`,
-                    borderTop:`3px solid ${renk}`,
-                    borderRadius:12,padding:14,
-                    display:'flex',flexDirection:'column',gap:10,
-                    animation:'fadeIn 0.25s ease',
-                  }}>
+                  <div style={{background:'var(--surface-2)',border:`1px solid ${renk}40`,borderTop:`3px solid ${renk}`,borderRadius:12,padding:14,display:'flex',flexDirection:'column',gap:10,animation:'fadeIn 0.25s ease'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'start'}}>
                       <div>
                         <div style={{fontSize:16,fontWeight:800,color:renk}}>{d.ilce}</div>
@@ -1020,14 +837,14 @@ export default function App() {
                       </div>
                     </div>
                     <div style={{height:5,borderRadius:3,background:'rgba(255,255,255,0.06)',overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${pct}%`,background:renk,borderRadius:3,transition:'width 0.6s ease'}}/>
+                      <div style={{height:'100%',width:`${(skor/5)*100}%`,background:renk,borderRadius:3,transition:'width 0.6s ease'}}/>
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
                       {[
-                        {label:'Uygun Arazi',   val: `${Number(d.uygun_alan_ha||0).toLocaleString('tr')} ha`},
-                        {label:'Kurulu Güç',     val: `${Number(d.tahmini_mw||0).toFixed(0)} MW`},
-                        {label:'En Düşük Skor', val: d.skor_min?.toFixed(2)||'—'},
-                        {label:'En Yüksek Skor',val: d.skor_max?.toFixed(2)||'—'},
+                        {label:'Uygun Arazi',    val:`${Number(d.uygun_alan_ha||0).toLocaleString('tr')} ha`},
+                        {label:'Kurulu Güç',      val:`${Number(d.tahmini_mw||0).toFixed(0)} MW`},
+                        {label:'En Düşük Skor',  val:d.skor_min?.toFixed(2)||'—'},
+                        {label:'En Yüksek Skor', val:d.skor_max?.toFixed(2)||'—'},
                       ].map(({label,val})=>(
                         <div key={label} style={{background:'rgba(0,0,0,0.2)',borderRadius:7,padding:'8px 10px'}}>
                           <div style={{fontSize:10,color:'var(--text-2)',marginBottom:3,lineHeight:1.3}}>{label}</div>
@@ -1036,12 +853,7 @@ export default function App() {
                       ))}
                     </div>
                     {permissions?.raporlar && (
-                      <button onClick={()=>navigateTo('raporlar')} style={{
-                        padding:'9px',borderRadius:8,border:'1px solid rgba(14,165,164,0.3)',
-                        background:'var(--brand-soft)',color:'var(--brand)',
-                        fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',
-                        display:'flex',alignItems:'center',justifyContent:'center',gap:6,
-                      }}>
+                      <button onClick={()=>navigateTo('raporlar')} style={{padding:'9px',borderRadius:8,border:'1px solid rgba(14,165,164,0.3)',background:'var(--brand-soft)',color:'var(--brand)',fontFamily:'inherit',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M7 17 17 7M9 7h8v8"/></svg>
                         Detaylı Raporu Aç
                       </button>
@@ -1050,107 +862,67 @@ export default function App() {
                 );
               })()}
 
+              {/* Hava */}
               {havaDetay && !ilceLoading && (
-                <div style={{
-                  background:'var(--surface-2)',
-                  border:'1px solid var(--border)',
-                  borderRadius:12,padding:14,
-                  animation:'fadeIn 0.3s ease',
-                }}>
-                  <div style={{display:'flex',justifyContent:'space-between',
-                    alignItems:'center',marginBottom:12}}>
-                    <div style={{fontSize:11,fontWeight:700,color:'var(--text)'}}>
-                      Anlık Hava · Open-Meteo
-                    </div>
-                    <div style={{fontSize:9,color:'var(--muted)',
-                      background:'var(--surface)',padding:'2px 7px',
-                      borderRadius:999,border:'1px solid var(--border)'}}>
-                      {havaDetay.anlik.zaman.slice(11,16)}
-                    </div>
+                <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:12,padding:14,animation:'fadeIn 0.3s ease'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'var(--text)'}}>Anlık Hava · Open-Meteo</div>
+                    <div style={{fontSize:9,color:'var(--muted)',background:'var(--surface)',padding:'2px 7px',borderRadius:999,border:'1px solid var(--border)'}}>{havaDetay.anlik.zaman.slice(11,16)}</div>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:12}}>
-                    {(energyType==='GES' ? [
+                    {(energyType==='GES'?[
                       {icon:'☀',label:'Solar Radyasyon',val:`${havaDetay.anlik.solar_wm2} W/m²`,color:'#F59E0B',bar:Math.min(havaDetay.anlik.solar_wm2/1000,1)},
                       {icon:'☁',label:'Bulutluluk',val:`%${havaDetay.anlik.bulutluluk}`,color:'#94A3B8',bar:havaDetay.anlik.bulutluluk/100},
                       {icon:'🌡',label:'Sıcaklık',val:`${havaDetay.anlik.sicaklik}°C`,color:'#F472B6',bar:Math.min((havaDetay.anlik.sicaklik+10)/50,1)},
                       {icon:'💨',label:'Rüzgâr (10m)',val:`${havaDetay.anlik.ruzgar_10m} km/h`,color:'#38BDF8',bar:Math.min(havaDetay.anlik.ruzgar_10m/30,1)},
-                    ] : [
+                    ]:[
                       {icon:'💨',label:'Rüzgâr (100m)',val:`${havaDetay.anlik.ruzgar_100m} km/h`,color:'#38BDF8',bar:Math.min(havaDetay.anlik.ruzgar_100m/50,1)},
                       {icon:'🧭',label:'Rüzgâr Yönü',val:`${havaDetay.anlik.ruzgar_yon}°`,color:'#0EA5A4',bar:havaDetay.anlik.ruzgar_yon/360},
                       {icon:'🌡',label:'Sıcaklık',val:`${havaDetay.anlik.sicaklik}°C`,color:'#F472B6',bar:Math.min((havaDetay.anlik.sicaklik+10)/50,1)},
                       {icon:'☁',label:'Bulutluluk',val:`%${havaDetay.anlik.bulutluluk}`,color:'#94A3B8',bar:havaDetay.anlik.bulutluluk/100},
                     ]).map(({icon,label,val,color,bar})=>(
                       <div key={label} style={{background:'var(--surface)',borderRadius:8,padding:'8px 10px'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                          <span style={{fontSize:10,color:'var(--muted)'}}>{icon} {label}</span>
-                        </div>
-                        <div style={{fontSize:13,fontWeight:700,color,fontFamily:'JetBrains Mono,monospace',marginBottom:4}}>{val}</div>
+                        <span style={{fontSize:10,color:'var(--muted)'}}>{icon} {label}</span>
+                        <div style={{fontSize:13,fontWeight:700,color,fontFamily:'JetBrains Mono,monospace',margin:'4px 0'}}>{val}</div>
                         <div style={{height:3,borderRadius:2,background:'var(--surface-2)',overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${bar*100}%`,background:color,borderRadius:2,transition:'width 0.6s'}}/>
+                          <div style={{height:'100%',width:`${bar*100}%`,background:color,borderRadius:2}}/>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div style={{fontSize:9.5,fontWeight:700,color:'var(--muted)',
-                    marginBottom:7,textTransform:'uppercase',letterSpacing:'0.06em'}}>
-                    7 Günlük Tahmin
-                  </div>
+                  <div style={{fontSize:9.5,fontWeight:700,color:'var(--muted)',marginBottom:7,textTransform:'uppercase',letterSpacing:'0.06em'}}>7 Günlük Tahmin</div>
                   <div style={{display:'flex',gap:3,alignItems:'flex-end',height:52}}>
                     {havaDetay.tahmin_7gun.map((g,i)=>{
-                      const solarH = Math.max((g.max_solar/1000)*40,2);
-                      const windH  = Math.max((g.max_wind/50)*40,2);
-                      const gun = new Date(g.tarih).toLocaleDateString('tr',{weekday:'short'});
+                      const solarH=Math.max((g.max_solar/1000)*40,2), windH=Math.max((g.max_wind/50)*40,2);
                       return(
                         <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
                           <div style={{display:'flex',gap:1,alignItems:'flex-end',height:40}}>
-                            <div style={{width:6,height:solarH,borderRadius:'2px 2px 0 0',background:'#F59E0B',opacity:0.8}} title={`Solar: ${g.max_solar} W/m²`}/>
-                            <div style={{width:6,height:windH,borderRadius:'2px 2px 0 0',background:'#38BDF8',opacity:0.8}} title={`Rüzgâr: ${g.max_wind} km/h`}/>
+                            <div style={{width:6,height:solarH,borderRadius:'2px 2px 0 0',background:'#F59E0B',opacity:0.8}}/>
+                            <div style={{width:6,height:windH,borderRadius:'2px 2px 0 0',background:'#38BDF8',opacity:0.8}}/>
                           </div>
-                          <div style={{fontSize:8,color:'var(--dim)',textTransform:'capitalize'}}>{gun}</div>
+                          <div style={{fontSize:8,color:'var(--dim)',textTransform:'capitalize'}}>{new Date(g.tarih).toLocaleDateString('tr',{weekday:'short'})}</div>
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{display:'flex',gap:10,marginTop:7}}>
-                    <div style={{display:'flex',alignItems:'center',gap:4,fontSize:9,color:'var(--muted)'}}>
-                      <div style={{width:8,height:8,borderRadius:1,background:'#F59E0B'}}/>Solar max
-                    </div>
-                    <div style={{display:'flex',alignItems:'center',gap:4,fontSize:9,color:'var(--muted)'}}>
-                      <div style={{width:8,height:8,borderRadius:1,background:'#38BDF8'}}/>Rüzgâr max
-                    </div>
-                  </div>
                 </div>
               )}
 
-              <div className="sidebar-section" style={{ display:'flex', flexDirection:'column', flex:1, minHeight: 0 }}>
-                <div className="sidebar-label" style={{ marginBottom: 8 }}>İlçe Sıralaması ({rankedDistricts.length})</div>
-                <div className="scroll-styled" style={{ overflowY: 'auto', maxHeight: '420px', paddingRight: '4px' }}>
-                  {rankedDistricts.map((item, i) => {
-                    const ilce = item.ilce;
-                    const skor = item.skor;
-                    const renk = skor >= 4.0 ? '#16a34a' : skor >= 3.0 ? '#84cc16' : skor >= 2.0 ? '#f59e0b' : '#ef4444';
-                    const isSelected = selectedIlce === ilce;
-                    return (
-                      <div key={ilce}
-                        style={{
-                          display:'flex',alignItems:'center',gap:10,
-                          padding:'6px 8px',borderRadius:8,
-                          borderBottom:'1px solid rgba(255,255,255,0.04)',
-                          cursor:'pointer',
-                          background:isSelected?'var(--brand-soft)':'transparent',
-                          transition:'background 0.15s',
-                        }}
-                        onClick={()=>{
-                          setSelectedIlce(ilce);
-                          setFlyToIlce(null);
-                          setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80);
-                        }}>
-                        <span style={{fontSize:10,fontWeight:700,color:'var(--muted)',width:16,textAlign:'right'}}>
-                          {String(i+1).padStart(2,'0')}
-                        </span>
+              {/* İlçe Sıralaması */}
+              <div className="sidebar-section" style={{display:'flex',flexDirection:'column',flex:1,minHeight:0}}>
+                <div className="sidebar-label" style={{marginBottom:8}}>İlçe Sıralaması ({rankedDistricts.length})</div>
+                <div className="scroll-styled" style={{overflowY:'auto',maxHeight:'420px',paddingRight:'4px'}}>
+                  {rankedDistricts.map((item,i)=>{
+                    const {ilce,skor}=item;
+                    const renk=skor>=4.0?'#16a34a':skor>=3.0?'#84cc16':skor>=2.0?'#f59e0b':'#ef4444';
+                    const isSel=selectedIlce===ilce;
+                    return(
+                      <div key={ilce} style={{display:'flex',alignItems:'center',gap:10,padding:'6px 8px',borderRadius:8,borderBottom:'1px solid rgba(255,255,255,0.04)',cursor:'pointer',background:isSel?'var(--brand-soft)':'transparent',transition:'background 0.15s'}}
+                        onClick={()=>{ setSelectedIlce(ilce); setFlyToIlce(null); setTimeout(()=>setFlyToIlce(ilce+'_'+Date.now()),80); }}>
+                        <span style={{fontSize:10,fontWeight:700,color:'var(--muted)',width:16,textAlign:'right'}}>{String(i+1).padStart(2,'0')}</span>
                         <div style={{flex:1}}>
                           <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                            <span style={{fontSize:12.5,fontWeight:600,color:isSelected?'var(--brand)':'var(--text)'}}>{ilce}</span>
+                            <span style={{fontSize:12.5,fontWeight:600,color:isSel?'var(--brand)':'var(--text)'}}>{ilce}</span>
                             <span style={{fontSize:12,fontWeight:800,color:renk}}>{skor.toFixed(2)}</span>
                           </div>
                           <div style={{height:3,borderRadius:2,background:'rgba(255,255,255,0.05)',overflow:'hidden'}}>
@@ -1167,25 +939,21 @@ export default function App() {
         </div>
       )}
 
-      {/* ── RAPORLAR ── */}
+      {/* ── RAPORLAR ───────────────────────────────────────── */}
       {page === 'raporlar' && (
         <div className="page-content" style={{flex:1,overflowY:'auto'}}>
           <IlceKarsilastirma energyType={energyType} initialIlce={selectedIlce}/>
         </div>
       )}
 
-      {page === 'santraller' && (
-        <Santraller/>
+      {/* ── SANTRALLER ─────────────────────────────────────── */}
+      {page === 'santraller' && <Santraller/>}
+
+      {/* ── ADMIN ──────────────────────────────────────────── */}
+      {page === 'admin' && user?.rol === 'admin' && (
+        <AdminPanel token={token} user={user} onBack={() => navigateTo('home')}/>
       )}
 
-      {/* ── ADMIN PANEL ── */}
-      {page === 'admin' && user?.rol === 'admin' && (
-        <AdminPanel
-          token={token}
-          user={user}
-          onBack={() => navigateTo('home')}
-        />
-      )}
     </div>
   );
 }
