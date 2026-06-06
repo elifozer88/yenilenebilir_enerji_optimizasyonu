@@ -49,6 +49,20 @@ Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şu
 
 <img width="2842" height="1566" alt="image" src="https://github.com/user-attachments/assets/5e096303-4cc3-4ca0-b75a-ea1112f6cfa7" />
 
+<img width="2844" height="1578" alt="image" src="https://github.com/user-attachments/assets/d66194f2-8eda-49a1-a826-634054d1e8e1" />
+
+<img width="2836" height="1580" alt="image" src="https://github.com/user-attachments/assets/84d843ea-f06e-4042-9713-4b62e388d288" />
+
+<img width="2842" height="1558" alt="image" src="https://github.com/user-attachments/assets/21d6e83d-3389-420c-8dab-f3de331ae439" />
+
+<img width="2846" height="1546" alt="image" src="https://github.com/user-attachments/assets/33724343-a5f5-44c2-9056-d53613013cfc" />
+
+<img width="2816" height="1480" alt="image" src="https://github.com/user-attachments/assets/f23407e8-95c0-42f1-86e7-04c69431cb05" />
+
+<img width="2868" height="1570" alt="image" src="https://github.com/user-attachments/assets/a55150d4-2202-45ed-a8fa-5e0e369bbd4c" />
+
+
+
 
 
 ## 🛠️ Teknoloji Yığını
@@ -195,10 +209,5 @@ Uygulamanın yetkilendirme sistemini test etmek için aşağıdaki roller ve var
 
 * **Yönetici (Admin):**
   * Kullanıcı Adı: `admin`
-  * Şifre: `admin123`
-* **Müdür (Mudur):**
-  * Kullanıcı Adı: `mudur`
-  * Şifre: `mudur123`
-* **Analist (Analist):**
-  * Kullanıcı Adı: `analist1`
-  * Şifre: `analist123`
+  * Şifre: `Atlas2026!`
+
