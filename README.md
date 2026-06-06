@@ -3,6 +3,8 @@
 YE·ATLAS, İzmir genelindeki **GES (Güneş Enerjisi Santrali)** ve **RES (Rüzgâr Enerjisi Santrali)** kurulumuna en uygun alanları belirlemek, analiz etmek ve raporlamak amacıyla geliştirilmiş **AHP (Analitik Hiyerarşi Süreci)** tabanlı bir karar destek sistemidir.
 
 Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü yöneticileri ve analistleri için coğrafi bilgi sistemleri (CBS) veri katmanlarını, mekânsal analizleri ve anlık hava tahminlerini bir araya getiren premium ve modern bir web uygulamasıdır.
+<img width="2846" height="1568" alt="image" src="https://github.com/user-attachments/assets/1ae59541-40a4-4077-b525-c69376f80896" />
+
 
 ---
 
