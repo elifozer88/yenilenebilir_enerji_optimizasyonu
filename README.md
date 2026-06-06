@@ -3,7 +3,12 @@
 YE·ATLAS, İzmir genelindeki **GES (Güneş Enerjisi Santrali)** ve **RES (Rüzgâr Enerjisi Santrali)** kurulumuna en uygun alanları belirlemek, analiz etmek ve raporlamak amacıyla geliştirilmiş **AHP (Analitik Hiyerarşi Süreci)** tabanlı bir karar destek sistemidir.
 
 Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü yöneticileri ve analistleri için coğrafi bilgi sistemleri (CBS) veri katmanlarını, mekânsal analizleri ve anlık hava tahminlerini bir araya getiren premium ve modern bir web uygulamasıdır.
+
+
 <img width="2846" height="1568" alt="image" src="https://github.com/user-attachments/assets/1ae59541-40a4-4077-b525-c69376f80896" />
+
+<img width="2834" height="1582" alt="image" src="https://github.com/user-attachments/assets/4c133e6f-fc2b-49e0-9819-58ef1f5f33fa" />
+
 
 
 ---
@@ -21,17 +26,30 @@ Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şu
 * **Göz Yormayan Filtreleme:** Atlas üzerindeki raster ve polygon katmanları, haritada göz yormaması amacıyla varsayılan olarak yalnızca **Sınıf 4 (Uygun)** ve **Sınıf 5 (Çok Uygun)** alanları renklendirecek şekilde dinamik filtrelenmektedir.
 * Her ilçe için interaktif sınır çizgileri, tıklama ile yakınlaşma (zoom) ve detay kartları.
 
+* <img width="2880" height="1584" alt="image" src="https://github.com/user-attachments/assets/c3d6fb52-9ba3-4c07-83eb-72a844bfc755" />
+
+<img width="2836" height="1584" alt="image" src="https://github.com/user-attachments/assets/aa53e514-6081-4651-9fca-33651248871b" />
+
+
+
 ### 3. Yetki Tabanlı Erişim Kontrolü (RBAC)
 * Güvenli JWT (JSON Web Token) tabanlı kimlik doğrulama.
 * **Roller:** `Admin`, `Müdür` ve `Analist`.
 * **Dinamik Yetkilendirme:** Admin yetkisindeki kullanıcılar, Sistem Yönetimi panelinden hangi rollerin hangi sayfaları (`Atlas`, `Raporlar`, `Santraller`) görüntüleyebileceğini dinamik olarak açıp kapatabilir. Değişiklikler anında hem veritabanında hem de frontend üzerinde uygulanır.
+
+<img width="2876" height="1566" alt="image" src="https://github.com/user-attachments/assets/4dda0d81-46df-4a91-9367-7511809da87a" />
+
 
 ### 4. Raporlama ve Hava Durumu Entegrasyonu
 * Open-Meteo API aracılığıyla ilçelerin anlık sıcaklık, rüzgâr hızı, solar radyasyon, bulutluluk değerleri ve 7 günlük tahmin grafikleri.
 * İlçelerin kapasite tahmini, kurulu güç potansiyeli ve alan bazlı istatistiklerinin karşılaştırmalı analizi.
 * Detaylı PDF rapor çıktısı alabilme.
 
----
+---<img width="2846" height="1596" alt="image" src="https://github.com/user-attachments/assets/f0635250-e736-40cf-9533-5cb1a7dba1e7" />
+
+<img width="2842" height="1566" alt="image" src="https://github.com/user-attachments/assets/5e096303-4cc3-4ca0-b75a-ea1112f6cfa7" />
+
+
 
 ## 🛠️ Teknoloji Yığını
 
