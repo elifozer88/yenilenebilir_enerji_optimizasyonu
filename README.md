@@ -1,83 +1,121 @@
 # YE·ATLAS — İzmir Yenilenebilir Enerji Uygunluk Atlası
 
-YE·ATLAS, İzmir genelindeki **GES (Güneş Enerjisi Santrali)** ve **RES (Rüzgâr Enerjisi Santrali)** kurulumuna en uygun alanları belirlemek, analiz etmek ve raporlamak amacıyla geliştirilmiş **AHP (Analitik Hiyerarşi Süreci)** tabanlı bir karar destek sistemidir.
+YE·ATLAS, İzmir genelindeki **GES (Güneş Enerjisi Santrali)** ve **RES (Rüzgâr Enerjisi Santrali)** kurulumuna en uygun alanları belirlemek, analiz etmek ve raporlamak amacıyla geliştirilmiş, **AHP (Analitik Hiyerarşi Süreci)** tabanlı bir mekânsal karar destek sistemidir.
 
-Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü yöneticileri ve analistleri için coğrafi bilgi sistemleri (CBS) veri katmanlarını, mekânsal analizleri ve anlık hava tahminlerini bir araya getiren premium ve modern bir web uygulamasıdır.
+Proje; coğrafi bilgi sistemleri (CBS) veri katmanlarını, çok kriterli mekânsal analizleri ve anlık hava tahminlerini tek bir modern web uygulamasında bir araya getirir. İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü'nün yöneticileri ve analistleri hedef kullanıcı olarak alınarak tasarlanmıştır.
 
+> **Not:** Bu repo bir bitirme/portföy projesidir. Canlı sürüm sergileme ve deneme amaçlı yayınlanmıştır; gerçek operasyonel kullanımda değildir ve içinde gerçek/gizli kurumsal veri barındırmaz.
 
-<img width="2846" height="1568" alt="image" src="https://github.com/user-attachments/assets/1ae59541-40a4-4077-b525-c69376f80896" />
+<img width="100%" alt="YE·ATLAS genel görünüm" src="https://github.com/user-attachments/assets/1ae59541-40a4-4077-b525-c69376f80896" />
 
-<img width="2834" height="1582" alt="image" src="https://github.com/user-attachments/assets/4c133e6f-fc2b-49e0-9819-58ef1f5f33fa" />
+<img width="100%" alt="YE·ATLAS ana ekran" src="https://github.com/user-attachments/assets/4c133e6f-fc2b-49e0-9819-58ef1f5f33fa" />
 
+---
 
+## 🌐 Canlı Demo
+
+Uygulamayı denemek için: `<CANLI_DEMO_ADRESİNİZ>`
+Giriş yapmak için aşağıdaki **Demo Giriş Bilgileri** bölümündeki test hesabını kullanabilirsiniz.
+
+---
+
+## 🛰️ CBS / QGIS Analiz Metodolojisi
+
+Projenin çekirdeğini, uygunluk haritalarının üretildiği QGIS tabanlı mekânsal analiz iş akışı oluşturur. Tüm katmanlar **EPSG:32635 (UTM Zone 35N)** koordinat sisteminde ve **100 m çözünürlükte** işlenmiştir. Süreç beş aşamadan oluşur:
+
+### Aşama 1 — Veri Toplama ve Ön İşleme
+İzmir geneline ait ham coğrafi veriler toplanır ve standart bir referansa getirilir:
+- **Raster veriler:** Sayısal Yükseklik Modeli (DEM), güneş radyasyonu (solar irradiance), rüzgâr hızı, arazi örtüsü/kullanımı.
+- **Vektör veriler:** Karayolları, enerji nakil hatları (ENH), yerleşim alanları, fay hatları, akarsular, koruma alanları ve kuş habitatları.
+- Tüm katmanlar EPSG:32635'e yeniden projekte edilir, 100 m piksel boyutuna yeniden örneklenir (resample) ve İzmir il sınırına kırpılır (clip).
+
+### Aşama 2 — Türetilmiş Kriter Katmanlarının Üretimi
+Ham verilerden analize girecek kriter katmanları üretilir:
+- DEM üzerinden **eğim (slope)** ve **bakı (aspect)** hesaplanır.
+- Vektör verilerden **mesafe (proximity / öklid uzaklık) rasterları** üretilir: yola yakınlık, ENH yakınlığı, yerleşime uzaklık, fay hattına uzaklık, akarsuya uzaklık.
+
+### Aşama 3 — Yeniden Sınıflandırma (Reclassification)
+Birbirinden farklı birim ve ölçeklerdeki kriter katmanları, ortak bir uygunluk ölçeğine taşınır:
+- Her kriter, tanımlı eşik değerlerine göre **1 (en uygunsuz) – 5 (en uygun)** ölçeğinde yeniden sınıflandırılır.
+- Her kriter için ayrı bir yeniden sınıflandırma (reclassification) tablosu kullanılır.
+
+### Aşama 4 — Kısıt Maskeleri (Constraint Masks)
+Yasal/ekolojik olarak kuruluma kapalı alanlar analizin dışında bırakılır:
+- Koruma alanları ve kuş habitatları gibi hassas bölgeler maskelenerek (exclusion mask) nihai uygunluk hesabından çıkarılır.
+
+### Aşama 5 — AHP Ağırlıklı Çakıştırma (Weighted Overlay)
+Sınıflandırılmış kriter katmanları, AHP ile belirlenen ağırlıklarla raster hesaplayıcıda birleştirilir:
+- Çıktılar:
+  - `izmir_ges_uygunluk_v4.tif` — değer aralığı **1.74 – 3.90**
+  - `izmir_res_uygunluk_v5.tif` — değer aralığı **1.62 – 4.39**
+- AHP karşılaştırma matrislerinin **Tutarlılık Oranı (Consistency Ratio, CR) < 0.10** olarak doğrulanmıştır.
+- Sonuçlar **Random Forest** modeliyle çapraz doğrulanmış; tahmin ile uygunluk skorları arasında **Pearson r = 0.956** korelasyon elde edilmiştir.
+
+### AHP Kriter Ağırlıkları
+- **GES Kriterleri:** Solar Radyasyon (%32), Arazi Kullanımı (%25), Eğim (%11), Bakı (%9), ENH Yakınlığı (%8), Yerleşim Uzaklığı (%7), Yola Yakınlık (%4), Fay Hatlarından Uzaklık (%3), Akarsulardan Uzaklık (%1).
+- **RES Kriterleri:** Rüzgâr Hızı (%30), Arazi Kullanımı (%27), Yükseklik (%13), Yerleşim Uzaklığı (%10), ENH Yakınlığı (%6), Eğim (%5), Yola Yakınlık (%4), Fay Hatlarından Uzaklık (%3), Akarsulardan Uzaklık (%2).
 
 ---
 
 ## 🚀 Öne Çıkan Özellikler
 
-### 1. Karar Destek ve AHP Metodolojisi
-* **GES Kriterleri:** Solar Radyasyon (%32), Arazi Kullanımı (%25), Eğim (%11), Bakı (%9), ENH Yakınlığı (%8), Yerleşim Uzaklığı (%7), Yola Yakınlık (%4), Fay Hatlarından Uzaklık (%3), Akarsulardan Uzaklık (%1).
-* **RES Kriterleri:** Rüzgâr Hızı (%30), Arazi Kullanımı (%27), Yükseklik (%13), Yerleşim Uzaklığı (%10), ENH Yakınlığı (%6), Eğim (%5), Yola Yakınlık (%4), Fay Hatlarından Uzaklık (%3), Akarsulardan Uzaklık (%2).
-* Tutarlılık Oranı (Consistency Ratio - CR) < 0.10 doğruluk limitleri içerisindedir.
+### 1. Gelişmiş CBS Atlas Görünümü (Deck.gl & 3D)
+- MapTiler altyapısı ile 3D Terrain (yükselti) haritası.
+- ESRI World Imagery uydu fotoğrafları katmanı.
+- **Göz yormayan filtreleme:** Raster ve polygon katmanları, varsayılan olarak yalnızca **Sınıf 4 (Uygun)** ve **Sınıf 5 (Çok Uygun)** alanları renklendirecek şekilde dinamik filtrelenir.
+- Her ilçe için interaktif sınır çizgileri, tıklayarak yakınlaşma (zoom) ve detay kartları.
 
-### 2. Gelişmiş CBS Atlas Görünümü (Deck.gl & 3D)
-* MapTiler altyapısı ile 3D Terrain (Yükselti) haritası.
-* ESRI World Imagery uydu fotoğrafları katmanı.
-* **Göz Yormayan Filtreleme:** Atlas üzerindeki raster ve polygon katmanları, haritada göz yormaması amacıyla varsayılan olarak yalnızca **Sınıf 4 (Uygun)** ve **Sınıf 5 (Çok Uygun)** alanları renklendirecek şekilde dinamik filtrelenmektedir.
-* Her ilçe için interaktif sınır çizgileri, tıklama ile yakınlaşma (zoom) ve detay kartları.
+<img width="100%" alt="3D Atlas harita görünümü" src="https://github.com/user-attachments/assets/c3d6fb52-9ba3-4c07-83eb-72a844bfc755" />
 
-* <img width="2880" height="1584" alt="image" src="https://github.com/user-attachments/assets/c3d6fb52-9ba3-4c07-83eb-72a844bfc755" />
+<img width="100%" alt="İlçe bazlı atlas detayı" src="https://github.com/user-attachments/assets/aa53e514-6081-4651-9fca-33651248871b" />
 
-<img width="2836" height="1584" alt="image" src="https://github.com/user-attachments/assets/aa53e514-6081-4651-9fca-33651248871b" />
+### 2. Yetki Tabanlı Erişim Kontrolü (RBAC)
+- Güvenli **JWT** tabanlı kimlik doğrulama.
+- Roller: `Admin`, `Müdür`, `Analist`.
+- **Dinamik yetkilendirme:** Admin yetkisindeki kullanıcılar, Sistem Yönetimi panelinden hangi rollerin hangi sayfaları (`Atlas`, `Raporlar`, `Santraller`) görebileceğini açıp kapatabilir. Değişiklikler anında hem veritabanına hem de arayüze yansır.
 
+<img width="100%" alt="Sistem yönetimi ve yetkilendirme paneli" src="https://github.com/user-attachments/assets/4dda0d81-46df-4a91-9367-7511809da87a" />
 
+### 3. Raporlama ve Hava Durumu Entegrasyonu
+- Open-Meteo API ile ilçelerin anlık sıcaklık, rüzgâr hızı, solar radyasyon, bulutluluk değerleri ve 7 günlük tahmin grafikleri.
+- İlçe bazında kapasite tahmini, kurulu güç potansiyeli ve alan istatistiklerinin karşılaştırmalı analizi.
+- Detaylı PDF rapor çıktısı.
 
-### 3. Yetki Tabanlı Erişim Kontrolü (RBAC)
-* Güvenli JWT (JSON Web Token) tabanlı kimlik doğrulama.
-* **Roller:** `Admin`, `Müdür` ve `Analist`.
-* **Dinamik Yetkilendirme:** Admin yetkisindeki kullanıcılar, Sistem Yönetimi panelinden hangi rollerin hangi sayfaları (`Atlas`, `Raporlar`, `Santraller`) görüntüleyebileceğini dinamik olarak açıp kapatabilir. Değişiklikler anında hem veritabanında hem de frontend üzerinde uygulanır.
+<img width="100%" alt="Raporlama ekranı" src="https://github.com/user-attachments/assets/f0635250-e736-40cf-9533-5cb1a7dba1e7" />
 
-<img width="2876" height="1566" alt="image" src="https://github.com/user-attachments/assets/4dda0d81-46df-4a91-9367-7511809da87a" />
+<img width="100%" alt="Hava durumu entegrasyonu" src="https://github.com/user-attachments/assets/5e096303-4cc3-4ca0-b75a-ea1112f6cfa7" />
 
+<img width="100%" alt="İlçe detay ve istatistikler" src="https://github.com/user-attachments/assets/d66194f2-8eda-49a1-a826-634054d1e8e1" />
 
-### 4. Raporlama ve Hava Durumu Entegrasyonu
-* Open-Meteo API aracılığıyla ilçelerin anlık sıcaklık, rüzgâr hızı, solar radyasyon, bulutluluk değerleri ve 7 günlük tahmin grafikleri.
-* İlçelerin kapasite tahmini, kurulu güç potansiyeli ve alan bazlı istatistiklerinin karşılaştırmalı analizi.
-* Detaylı PDF rapor çıktısı alabilme.
+<img width="100%" alt="Kapasite ve potansiyel analizi" src="https://github.com/user-attachments/assets/84d843ea-f06e-4042-9713-4b62e388d288" />
 
----<img width="2846" height="1596" alt="image" src="https://github.com/user-attachments/assets/f0635250-e736-40cf-9533-5cb1a7dba1e7" />
+<img width="100%" alt="Karşılaştırmalı analiz görünümü" src="https://github.com/user-attachments/assets/21d6e83d-3389-420c-8dab-f3de331ae439" />
 
-<img width="2842" height="1566" alt="image" src="https://github.com/user-attachments/assets/5e096303-4cc3-4ca0-b75a-ea1112f6cfa7" />
+<img width="100%" alt="Tahmin grafikleri" src="https://github.com/user-attachments/assets/33724343-a5f5-44c2-9056-d53613013cfc" />
 
-<img width="2844" height="1578" alt="image" src="https://github.com/user-attachments/assets/d66194f2-8eda-49a1-a826-634054d1e8e1" />
+<img width="100%" alt="PDF rapor çıktısı" src="https://github.com/user-attachments/assets/f23407e8-95c0-42f1-86e7-04c69431cb05" />
 
-<img width="2836" height="1580" alt="image" src="https://github.com/user-attachments/assets/84d843ea-f06e-4042-9713-4b62e388d288" />
+<img width="100%" alt="Genel uygulama görünümü" src="https://github.com/user-attachments/assets/a55150d4-2202-45ed-a8fa-5e0e369bbd4c" />
 
-<img width="2842" height="1558" alt="image" src="https://github.com/user-attachments/assets/21d6e83d-3389-420c-8dab-f3de331ae439" />
-
-<img width="2846" height="1546" alt="image" src="https://github.com/user-attachments/assets/33724343-a5f5-44c2-9056-d53613013cfc" />
-
-<img width="2816" height="1480" alt="image" src="https://github.com/user-attachments/assets/f23407e8-95c0-42f1-86e7-04c69431cb05" />
-
-<img width="2868" height="1570" alt="image" src="https://github.com/user-attachments/assets/a55150d4-2202-45ed-a8fa-5e0e369bbd4c" />
-
-
-
-
+---
 
 ## 🛠️ Teknoloji Yığını
 
 ### Backend
-* **Python FastAPI:** Yüksek performanslı asenkron API altyapısı.
-* **PostgreSQL / PostGIS:** CBS vektör sorguları ve mekânsal analizler için veri tabanı.
-* **Rasterio & Shapely & GeoPandas:** TIF formatındaki coğrafi verilerin işlenmesi ve vektörize edilmesi.
-* **Rio-Tiler & PIL (Pillow):** Dinamik PNG tile üretimi ve renklendirme.
-* **PyJWT & Bcrypt:** Güvenli şifreleme ve token doğrulama.
+- **Python / FastAPI:** Yüksek performanslı asenkron API altyapısı.
+- **PostgreSQL / PostGIS:** CBS vektör sorguları ve mekânsal analizler için veri tabanı.
+- **Rasterio, Shapely, GeoPandas:** TIF formatındaki coğrafi verilerin işlenmesi ve vektörize edilmesi.
+- **Rio-Tiler, Pillow:** Dinamik PNG tile üretimi ve renklendirme.
+- **PyJWT, Bcrypt:** Güvenli şifreleme ve token doğrulama.
 
 ### Frontend
-* **React (ES6+):** Component tabanlı arayüz geliştirme.
-* **Deck.gl & Maplibre GL:** WebGL tabanlı yüksek performanslı 3D CBS veri görselleştirme.
-* **Vanilla CSS (HSL Renk Sistemi):** Premium karanlık/aydınlık mod şemaları ve yumuşak geçiş efektleri.
+- **React (ES6+):** Bileşen tabanlı arayüz.
+- **Deck.gl, MapLibre GL:** WebGL tabanlı yüksek performanslı 3D CBS görselleştirme.
+- **Vanilla CSS (HSL renk sistemi):** Karanlık/aydınlık mod ve yumuşak geçiş efektleri.
+
+### Altyapı
+- **Docker & Docker Compose:** PostGIS + FastAPI + Nginx/React tam orkestrasyonu.
+- **Hetzner Cloud (Ubuntu VPS):** Production dağıtımı.
 
 ---
 
@@ -85,129 +123,118 @@ Proje, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şu
 
 ```text
 ├── backend/
-│   ├── routers/             # API rotaları (ges, res, auth, ahp, santral vb.)
-│   ├── main.py              # FastAPI ana uygulama dosyası (port 8003)
-│   ├── tile_server.py       # Dinamik TIF raster tile sunucusu
-│   ├── database.py          # PostgreSQL bağlantı havuzu
-│   ├── calistir.py          # CBS raster verilerini veritabanına aktarma/vektörize etme scripti
-│   └── .env                 # Veritabanı bağlantı ayarları
+│   ├── routers/          # API rotaları (ges, res, auth, ahp, santral vb.)
+│   ├── main.py           # FastAPI ana uygulama dosyası
+│   ├── tile_server.py    # Dinamik TIF raster tile sunucusu
+│   ├── database.py       # PostgreSQL bağlantı havuzu
+│   ├── calistir.py       # CBS raster verilerini veritabanına aktarma/vektörize etme scripti
+│   └── .env              # Veritabanı bağlantı ayarları (repoya dahil DEĞİLDİR — bkz. .env.example)
 ├── frontend/
-│   ├── public/              # Statik dosyalar ve logolar
+│   ├── public/           # Statik dosyalar ve logolar
 │   ├── src/
-│   │   ├── components/      # Arayüz bileşenleri (Map, AdminPanel, Login vb.)
-│   │   ├── App.js           # Ana React bileşeni ve sayfa yönlendiricileri
-│   │   └── Atlas.css        # Premium tema ve CSS tasarımları
-│   └── package.json         # Bağımlılıklar ve proxy yapılandırması (port 3000)
+│   │   ├── components/    # Arayüz bileşenleri (Map, AdminPanel, Login vb.)
+│   │   ├── App.js         # Ana React bileşeni ve sayfa yönlendiricileri
+│   │   └── Atlas.css      # Tema ve CSS tasarımları
+│   └── package.json
 ├── data/
-│   └── proceed/             # İzmir GES/RES TIF formatında CBS harita verileri
+│   └── proceed/          # İzmir GES/RES TIF formatında CBS harita verileri
 ```
 
 ---
 
-## ⚙️ Kurulum ve Çalıştırma
+## ⚙️ Yerel Kurulum ve Çalıştırma
 
 ### 1. Veritabanı Kurulumu
-1. PostgreSQL ve PostGIS eklentisini bilgisayarınıza kurun.
-2. `yenilenebilir` adında bir veritabanı oluşturun ve `CREATE EXTENSION postgis;` sorgusunu çalıştırın.
-3. `backend/.env` dosyasına veritabanı bilgilerinizi girin:
-   ```env
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=yenilenebilir
-   DB_USER=postgres
-   DB_PASS=şifreniz
-   JWT_SECRET=güvenli_anahtarınız
-   ```
+1. PostgreSQL ve PostGIS eklentisini kurun.
+2. `yenilenebilir` adında bir veritabanı oluşturun ve `CREATE EXTENSION postgis;` çalıştırın.
+3. `.env.example` dosyasını `backend/.env` olarak kopyalayıp kendi bilgilerinizi girin:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=yenilenebilir
+DB_USER=postgres
+DB_PASS=<veritabanı_şifreniz>
+JWT_SECRET=<güçlü_bir_gizli_anahtar>
+```
 
 ### 2. Backend Başlatma
-1. Gerekli Python bağımlılıklarını yükleyin:
-   ```bash
-   pip install fastapi uvicorn psycopg2 geopandas rasterio shapely PyJWT bcrypt pillow rio-tiler
-   ```
-2. Rasterio veri kütüphanesi için çevre değişkenini ayarlayıp sunucuyu başlatın:
-   ```powershell
-   # Windows PowerShell
-   $env:PROJ_DATA = "D:\YENİLENEBİLİR ENERJİ PROJE\.venv\Lib\site-packages\rasterio\proj_data"
-   cd backend
-   python -m uvicorn main:app --port 8003 --reload
-   ```
+```bash
+pip install fastapi uvicorn psycopg2 geopandas rasterio shapely PyJWT bcrypt pillow rio-tiler
+
+# Rasterio PROJ ortam değişkenini ayarlayın (örnek)
+# Windows PowerShell:
+$env:PROJ_DATA = "<rasterio_proj_data_yolunuz>"
+
+cd backend
+python -m uvicorn main:app --port 8003 --reload
+```
 
 ### 3. Frontend Başlatma
-1. Gerekli Node modüllerini yükleyin:
-   ```bash
-   npm install
-   ```
-2. Geliştirici sunucusunu başlatın:
-   ```bash
-   npm start
-   ```
-   Uygulama otomatik olarak `http://localhost:3000` adresinde açılacaktır.
+```bash
+npm install
+npm start
+```
+Uygulama `http://localhost:3000` adresinde açılır.
 
 ---
 
-## 🐳 Docker ile Hetzner Sunucu (VPS) Üzerinde Canlıya Alma (Production)
+## 🐳 Docker ile Production (Hetzner VPS) Dağıtımı
 
-Proje; PostGIS veritabanı, FastAPI backend servisi ve Nginx/React frontend yapısını içeren tam bir Docker orkestrasyonu (docker-compose) ile canlıya alınmaya hazır durumdadır.
+Proje; PostGIS, FastAPI ve Nginx/React yapısını içeren tam bir `docker-compose` orkestrasyonu ile canlıya alınmaya hazırdır.
 
 ### 1. Sunucu Hazırlığı
-1. Hetzner Cloud üzerinden Ubuntu VPS (min. 4GB - 8GB RAM önerilir) oluşturun ve UFW güvenlik duvarında gerekli portlara izin verin:
-   ```bash
-   ufw allow OpenSSH
-   ufw allow 80
-   ufw allow 443
-   ufw enable
-   ```
-2. Sunucuya Docker ve Docker Compose kurulumunu yapın:
-   ```bash
-   curl -fsSL https://get.docker.com | sh
-   ```
-3. Proje klasörünü `/opt/yeatlas` dizinine clone edin:
-   ```bash
-   git clone https://github.com/elifozer88/yenilenebilir_enerji_optimizasyonu.git /opt/yeatlas
-   cd /opt/yeatlas
-   ```
+```bash
+# Ubuntu VPS (min. 4-8 GB RAM önerilir) — güvenlik duvarı
+ufw allow OpenSSH
+ufw allow 80
+ufw allow 443
+ufw enable
 
-### 2. Harita Raster Verilerinin ve Veritabanının Aktarılması
-1. Yerel bilgisayarınızdaki TIF harita dosyalarını sunucuya `scp` ile gönderin:
-   ```bash
-   # Windows PowerShell terminalinde
-   mkdir -p /opt/yeatlas/data  # (Sunucu tarafında)
-   scp "D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed\izmir_ges_uygunluk_v4.tif" root@<SUNUCU_IP>:/opt/yeatlas/data/
-   scp "D:\YENİLENEBİLİR ENERJİ PROJE\data\proceed\izmir_res_uygunluk_v5.tif" root@<SUNUCU_IP>:/opt/yeatlas/data/
-   ```
-2. Yerel veritabanınızın yedeğini (`pg_dump`) alıp sunucuya gönderin:
-   ```bash
-   # Yerel Windows terminalinde
-   "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe" -U postgres -h localhost -p 5432 yenilenebilir > "C:\Users\eliff\yeatlas_backup.sql"
-   scp "C:\Users\eliff\yeatlas_backup.sql" root@<SUNUCU_IP>:/opt/yeatlas/
-   ```
+# Docker kurulumu
+curl -fsSL https://get.docker.com | sh
 
-### 3. Hizmetleri Başlatma ve Veritabanı Geri Yükleme
-1. Sunucu üzerinde sadece veritabanı servisini başlatın:
-   ```bash
-   docker compose up -d db
-   ```
-2. Postgres yedeğini docker konteyneri içerisine aktarın:
-   ```bash
-   docker exec -i ye_db psql -U postgres -c "CREATE DATABASE yenilenebilir;"
-   docker exec -i ye_db psql -U postgres yenilenebilir < /opt/yeatlas/yeatlas_backup.sql
-   ```
-3. Tüm servisleri (FastAPI backend ve Nginx/React frontend) inşa edip arka planda başlatın:
-   ```bash
-   docker compose up -d --build
-   ```
+# Projeyi klonlayın
+git clone https://github.com/elifozer88/yenilenebilir_enerji_optimizasyonu.git /opt/yeatlas
+cd /opt/yeatlas
+```
+
+### 2. Raster Verilerinin ve Veritabanının Aktarılması
+```bash
+# Yerel makineden TIF harita dosyalarını gönderin
+scp <yerel_data_yolu>/izmir_ges_uygunluk_v4.tif root@<SUNUCU_IP>:/opt/yeatlas/data/
+scp <yerel_data_yolu>/izmir_res_uygunluk_v5.tif root@<SUNUCU_IP>:/opt/yeatlas/data/
+
+# Yerel veritabanı yedeğini alıp gönderin
+pg_dump -U postgres -h localhost -p 5432 yenilenebilir > yeatlas_backup.sql
+scp yeatlas_backup.sql root@<SUNUCU_IP>:/opt/yeatlas/
+```
+
+### 3. Servisleri Başlatma ve Yedeği Geri Yükleme
+```bash
+docker compose up -d db
+docker exec -i ye_db psql -U postgres -c "CREATE DATABASE yenilenebilir;"
+docker exec -i ye_db psql -U postgres yenilenebilir < /opt/yeatlas/yeatlas_backup.sql
+docker compose up -d --build
+```
 
 ### 4. Yayını Doğrulama
-* **Frontend:** Tarayıcıdan `http://<SUNUCU_IP>` (Örn: `http://178.105.195.187`) adresine giderek uygulamanın açıldığını doğrulayabilirsiniz.
-* **API Sağlık Kontrolü:** `http://<SUNUCU_IP>/api/health` adresinden API servisinin `"status": "ok"` cevabı verdiğinden emin olun.
+- **Frontend:** Tarayıcıdan `http://<SUNUCU_IP>` adresine gidin.
+- **API sağlık kontrolü:** `http://<SUNUCU_IP>/api/health` adresinin `{"status": "ok"}` döndürdüğünü teyit edin.
 
 ---
 
-## 👤 Varsayılan Giriş Bilgileri
+## 👤 Demo / Test Giriş Bilgileri
 
-Uygulamanın yetkilendirme sistemini test etmek için aşağıdaki roller ve varsayılan kullanıcılar kullanılabilir:
+> Aşağıdaki hesap, yetkilendirme sistemini (RBAC) **denemek isteyen ziyaretçiler için** bilerek paylaşılan bir demo hesabıdır. Gerçek kurumsal kullanıcı bilgisi değildir. Kendi kurulumunuzda bu hesabı ilk girişte mutlaka güçlü bir şifreyle değiştirin.
 
-* **Yönetici (Admin):**
-  * Kullanıcı Adı: `admin`
-  * Şifre: `Atlas2026!`
+| Rol | Kullanıcı Adı | Şifre |
+| --- | --- | --- |
+| Yönetici (Admin) | `admin` | `Atlas2026!` |
 
+> `Müdür` ve `Analist` rolleri de sistemde tanımlıdır; RBAC akışını test etmek için Admin panelinden bu roller için kullanıcı oluşturabilirsiniz.
+
+---
+
+## 📌 Proje Bağlamı
+Bu çalışma, Dokuz Eylül Üniversitesi Yönetim Bilişim Sistemleri bölümü bitirme projesi kapsamında, İzmir Büyükşehir Belediyesi İklim Değişikliği ve Temiz Enerji Şube Müdürlüğü ile iş birliği içinde geliştirilmiştir.
