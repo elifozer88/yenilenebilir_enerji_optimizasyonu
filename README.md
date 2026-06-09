@@ -14,7 +14,7 @@ Proje; coğrafi bilgi sistemleri (CBS) veri katmanlarını, çok kriterli mekân
 
 ## 🌐 Canlı Demo
 
-Uygulamayı denemek için: `<CANLI_DEMO_ADRESİNİZ>`
+Uygulamayı denemek için: `https://yeatlas.com/'
 Giriş yapmak için aşağıdaki **Demo Giriş Bilgileri** bölümündeki test hesabını kullanabilirsiniz.
 
 ---
